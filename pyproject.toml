@@ -29,6 +29,8 @@ dependencies = ["httpx[socks]>=0.24,<1"]
 Homepage = "https://astromansion.com"
 Documentation = "https://astromansion.com/en/docs"
 API = "https://api.astromansion.com/docs"
+Repository = "https://github.com/mustafayavuzak/astromansion-python"
+Issues = "https://github.com/mustafayavuzak/astromansion-python/issues"
 
 [project.optional-dependencies]
 dev = [

@@ -14,7 +14,7 @@ from typing import Final
 class Package:
     """Identity this package presents to the API."""
 
-    VERSION: Final[str] = "0.2.1"
+    VERSION: Final[str] = "0.2.2"
     #: Matches the name on PyPI, so a server log names what to install.
     NAME: Final[str] = "astromansion"
 
@@ -87,8 +87,8 @@ class Catalog:
 
     A page costs one round trip and the calculation inside it is a rounding
     error beside that, so the only sensible page is the largest one the API
-    will serve. Reading 890 fixed stars is six requests at this size and a
-    hundred and eighty at five.
+    will serve. Reading the 906 unambiguous fixed-star targets is six requests
+    at this size and a hundred and eighty-two at five.
     """
 
     #: Largest page ``/v1/chart`` accepts. The engine computes at most 192

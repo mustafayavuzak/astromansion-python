@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.2.2
+
+- A subquery after `IN` or `NOT IN` now runs once instead of once for every row
+  of the outer table. It was re-executed per row, so the cost grew with the
+  product of the two tables: over 1,600 rows the same inner statement ran 1,600
+  times and the query took 485 milliseconds where the equivalent `GROUP BY`
+  takes one. It now takes 18 milliseconds. Against a real chart,
+  `WHERE name IN (SELECT name FROM stars)` fell from 91 milliseconds to 7.
+
+  Correlated subqueries are unaffected and still answer per row, because for
+  them each row is a different question.
+- Catalog documentation now distinguishes the 908 published fixed-star names,
+  the 906 unambiguous `fixed_stars` calculation targets, and the 953 rows in
+  MansionSQL's broader `stars` table.
+- `antiscia` is documented as the response category. The retired `moons`
+  selector remains an accepted input alias, but clients no longer have to infer
+  why the requested and returned category names differ.
+- The package README now opens with the Astro Mansion SDK banner used by the
+  public repository.
+
+  The client request surface is unchanged in this release.
+
 ## 0.2.1
 
 - The MansionSQL reference in the README now matches what the server answers.

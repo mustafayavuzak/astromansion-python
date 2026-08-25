@@ -1,4 +1,4 @@
-![Astro Mansion — Official Python SDK](banner.webp)
+![Astro Mansion — Official Python SDK](https://raw.githubusercontent.com/mustafayavuzak/astromansion-python/main/banner.webp)
 
 # AstroMansion
 
