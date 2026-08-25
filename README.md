@@ -163,7 +163,8 @@ Bodies come back grouped under the category that produced them, so read the
 group you asked for. The catalog publishes 38 Arabic lots and 908 fixed stars,
 along with `planets`, `dwarfs`, `asteroids`, `centaurs`, `comets`,
 `hypotheticals`, `points`, `advanced_points`, `lilith`, `planetary_nodes`,
-`exoplanets`, `moons` and `eclipses`.
+`exoplanets`, `antiscia` and `eclipses`. The API still accepts the retired
+`moons` selector as an input alias, but responses use `antiscia`.
 
 `chart` answers one page at a time, and a large category is more than one
 page. Use `bodies` to read the whole of it and let the client follow the
@@ -293,7 +294,7 @@ Every table but three carries the body columns: `code`, `name`, `longitude`,
 | `planets` | the planets |
 | `points` | angles and derived points |
 | `advanced_points` | the further derived points |
-| `dwarfs`, `centaurs`, `comets`, `moons`, `eclipses`, `lilith`, `exoplanets`, `hypotheticals`, `planetary_nodes`, `arabic_lots` | that catalog category |
+| `dwarfs`, `centaurs`, `comets`, `antiscia`, `eclipses`, `lilith`, `exoplanets`, `hypotheticals`, `planetary_nodes`, `arabic_lots` | that catalog category |
 | `natal_a` | the `birth` chart, named for joins |
 | `natal_b` | the `partner` chart |
 | `transits` | the `moment` chart |
