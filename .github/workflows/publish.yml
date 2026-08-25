@@ -1,0 +1,67 @@
+name: publish
+
+on:
+  push:
+    tags:
+      - "v*"
+
+# The workflow only ever reads the repository. Upload rights come from the
+# short-lived OIDC token minted in the publish job, not from a stored secret.
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: pip install -e ".[dev]"
+      - run: ruff check src tests
+      - run: mypy src/astromansion
+      - run: pytest tests -q
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install build twine
+      - run: python -m build
+      - run: twine check --strict dist/*
+      # The tag names the release, so a tag that disagrees with the version in
+      # the source would publish something nobody asked for. Refuse instead.
+      - name: Tag must match the package version
+        run: |
+          version=$(python -c "import tomllib,pathlib,re;\
+            src=pathlib.Path('src/astromansion/constants.py').read_text();\
+            print(re.search(r'VERSION: Final\[str\] = \"([^\"]+)\"', src).group(1))")
+          if [ "refs/tags/v$version" != "$GITHUB_REF" ]; then
+            echo "tag $GITHUB_REF does not match version $version" >&2
+            exit 1
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1

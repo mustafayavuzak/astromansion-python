@@ -1,0 +1,41 @@
+# Build output. The release workflow builds from a clean checkout, so a wheel
+# or sdist that exists here is a local leftover and must never be committed:
+# once pushed it stays in history and a stale artifact can be mistaken for a
+# published one.
+dist/
+build/
+*.egg-info/
+*.egg
+
+# Bytecode and tooling caches.
+__pycache__/
+*.py[cod]
+*.so
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+
+# Environments and credentials. An API key committed once is public even after
+# it is deleted, so the whole family is refused rather than named file by file.
+.env
+.env.*
+!.env.example
+.venv/
+venv/
+env/
+
+# Editor and operating-system leftovers.
+.idea/
+.vscode/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+
+# Scratch file kept from a local experiment; nothing imports it.
+kaza.bin

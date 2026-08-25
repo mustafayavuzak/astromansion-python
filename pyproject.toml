@@ -1,0 +1,91 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "astromansion"
+dynamic = ["version"]
+description = "Official Python client for the AstroMansion astrology API."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Mustafa Yavuz Ak", email = "founder@mustafayavuzak.com" }]
+keywords = ["astrology", "natal", "chart", "ephemeris", "api", "client"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Astronomy",
+    "Typing :: Typed",
+]
+dependencies = ["httpx[socks]>=0.24,<1"]
+
+[project.urls]
+Homepage = "https://astromansion.com"
+Documentation = "https://astromansion.com/en/docs"
+API = "https://api.astromansion.com/docs"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "pytest-asyncio>=0.23",
+    "respx>=0.21",
+    "ruff>=0.6",
+    "mypy>=1.10",
+    "build",
+    "twine",
+]
+
+# One source for the version. Listing it here as well would let the package
+# metadata and the User-Agent disagree about which release is running.
+[tool.hatch.version]
+path = "src/astromansion/constants.py"
+pattern = "VERSION: Final\\[str\\] = \"(?P<version>[^\"]+)\""
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/astromansion"]
+
+# The source archive carries what a consumer installs and reads, not the
+# development apparatus: the generator is a build-time tool for this repo, and
+# the suite needs dev dependencies a consumer has no reason to fetch.
+[tool.hatch.build.targets.sdist]
+include = [
+    "src/astromansion",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE",
+    "pyproject.toml",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
+# Turkish prose in docstrings and astrological glyphs in fixtures are content,
+# not confusable typos.
+ignore = ["RUF001", "RUF002", "RUF003"]
+
+[tool.ruff.lint.per-file-ignores]
+"src/astromansion/_methods*.py" = ["E501"]
+"src/astromansion/_endpoints.py" = ["E501"]
+"tools/generate_endpoints.py" = ["E501"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+files = ["src"]
+# The transport hands back either JSON or a document, so the shared hooks are
+# typed loosely and each generated method states the narrower type it returns.
+warn_return_any = false
