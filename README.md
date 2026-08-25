@@ -160,11 +160,16 @@ for lot in lots.data["bodies"]["arabic_lots"]:
 ```
 
 Bodies come back grouped under the category that produced them, so read the
-group you asked for. The catalog publishes 38 Arabic lots and 908 fixed stars,
-along with `planets`, `dwarfs`, `asteroids`, `centaurs`, `comets`,
+group you asked for. The catalog publishes 38 Arabic lots and 908 named
+fixed-star entries, along with `planets`, `dwarfs`, `asteroids`, `centaurs`,
+`comets`,
 `hypotheticals`, `points`, `advanced_points`, `lilith`, `planetary_nodes`,
 `exoplanets`, `antiscia` and `eclipses`. The API still accepts the retired
 `moons` selector as an input alias, but responses use `antiscia`.
+
+The `fixed_stars` calculation category resolves 906 unambiguous targets.
+`Isis` and `Ketu` remain discoverable catalog names, but a bare-name lookup for
+either resolves the higher-priority non-stellar point with the same name.
 
 `chart` answers one page at a time, and a large category is more than one
 page. Use `bodies` to read the whole of it and let the client follow the
@@ -177,7 +182,7 @@ found = client.bodies(
     lat=41.0082, lon=28.9784, timezone=3,
 )
 
-len(found["fixed_stars"])  # 908, in six requests
+len(found["fixed_stars"])  # 906, in six requests
 len(found["arabic_lots"])  # 38
 ```
 
@@ -187,8 +192,8 @@ never depends on how many.
 
 Each page costs a network round trip and the calculation inside it is a
 rounding error beside that, so `bodies` asks for the largest page the API
-serves. `page_size` lowers it, and lowering it buys nothing: 908 stars are
-six requests at 160 and a hundred and eighty-two at five.
+serves. `page_size` lowers it, and lowering it buys nothing: the 906
+calculation targets take six requests at the default page size.
 
 Some categories are enormous. `asteroids` holds twenty-eight thousand bodies,
 which is a hundred and seventy-seven round trips with nothing printed until
@@ -324,12 +329,13 @@ client.query(birth={...}, sql="SELECT name FROM asteroids")
 # body up by name.
 ```
 
-`stars` answers 953 rows while the `fixed_stars` catalog category walks 908,
-so the two are different selections and a count taken from one does not
-describe the other. The table is every point the engine places against a
-stellar position: the 908 fixed stars, 40 exoplanets and the 5 galactic and
-deep-sky points filed under `advanced_points`. One row per point, so counting
-the rows and counting the names give the same answer.
+`stars` answers 953 rows, the `fixed_stars` catalog lists 908 names, and the
+category walk returns 906 unambiguous calculation targets. These are different
+selections, so a count taken from one does not describe the others. The table
+contains every catalog row the engine places against a stellar position: 908
+fixed-star rows, 40 exoplanets and 5 galactic and deep-sky points filed under
+`advanced_points`. One row per published name means counting rows and names
+gives the same answer.
 
 `lots` and the `arabic_lots` category do not divide that way. Both answer 38:
 the table gives the lots computed for one chart, the category gives the names

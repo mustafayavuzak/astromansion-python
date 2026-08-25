@@ -53,7 +53,7 @@ def test_confirming_reads_it_anyway(respx_mock: respx.Router) -> None:
 def test_a_category_that_fits_needs_no_confirmation(
     respx_mock: respx.Router,
 ) -> None:
-    """890 fixed stars is six requests and has never been the problem."""
+    """A category below the safety threshold needs no confirmation."""
     served = iter([_page(890, 160), _page(890, None)])
     respx_mock.post("/v1/chart").mock(
         side_effect=lambda request: httpx.Response(200, json=next(served)),
