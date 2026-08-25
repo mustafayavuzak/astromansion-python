@@ -1,4 +1,8 @@
-# astromansion
+# AstroMansion
+
+[![PyPI](https://img.shields.io/pypi/v/astromansion)](https://pypi.org/project/astromansion/)
+[![Python](https://img.shields.io/pypi/pyversions/astromansion)](https://pypi.org/project/astromansion/)
+[![License](https://img.shields.io/pypi/l/astromansion)](LICENSE)
 
 Official Python client for the [AstroMansion](https://astromansion.com) astrology API.
 
