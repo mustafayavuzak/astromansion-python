@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.1
 
 - The MansionSQL reference in the README now matches what the server answers.
   `HAVING`, `OFFSET`, `DISTINCT`, `BETWEEN`, `EXISTS`, `CASE WHEN` and
@@ -18,6 +18,20 @@
 - The `NOT IN` behaviour when the inner set contains a `NULL` is written down.
   It follows standard SQL, which means it returns no rows at all, and that
   surprises people who have not met it before.
+- `COALESCE`, `LENGTH` and `SUBSTR` are new. The two text functions count
+  characters rather than bytes, which matters because a degree reads `11°1′36″`
+  and is eight characters in thirteen bytes; a byte-indexed slice of it returns
+  half of a character and displays as nothing.
+- `SUM` and `AVG` no longer lose the small end of a sum. They accumulated
+  plainly, so summing one large value and many small ones dropped the small
+  ones entirely: `1e16` followed by a hundred `1`s answered `1e16`. Over 953
+  rows the drift reached the twelfth figure. They now carry the rounding error
+  alongside the total and answer the correctly rounded sum.
+- Names are found whatever case they are written in, in every language the
+  engine publishes them in. Folding lowercased A to Z and passed everything
+  else through, so `Balık` resolved and `BALIK` did not, and seven of the
+  twelve Turkish sign names and twenty-four body names were unreachable in
+  capitals.
 
   The client is unchanged: `query` forwards a statement and always did.
 

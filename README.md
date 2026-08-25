@@ -439,6 +439,9 @@ arithmetic; none of them calculates anything further.
 | `ORB(a, b)` | two longitudes | their separation, never over 180 |
 | `SEPARATION(a, b)` | two longitudes | the same |
 | `ABS`, `ROUND`, `FLOOR`, `CEIL`, `SIGN` | a number | the usual arithmetic |
+| `COALESCE(a, b, …)` | up to 16 values | the first that is not `NULL` |
+| `LENGTH(text)` | text | its length in characters |
+| `SUBSTR(text, from[, count])` | text and 1-based positions | the slice |
 
 `RULER` is the traditional rulership and only that: Mars for Scorpio, Saturn
 for Aquarius, Jupiter for Pisces. A modern variant would be a second answer to
@@ -453,6 +456,14 @@ Triplicity, term and face are real dignities and are deliberately not reported,
 because they need a degree and a day-night distinction and this function is
 given a sign. Mercury in Virgo holds both domicile and exaltation and is
 reported as `domicile`.
+
+`LENGTH` and `SUBSTR` count characters, not bytes. A degree reads
+`11°1′36″`, which is eight characters written in thirteen bytes, so `LENGTH`
+answers 8 and `SUBSTR(dms, 3, 1)` answers `°` rather than the first half of it.
+
+`COALESCE` earns its place on aggregates. No column of a chart is ever `NULL`,
+but an aggregate over a group that matched nothing is, so
+`COALESCE(AVG(orb), 0)` is the way to ask for a floor instead of an unknown.
 
 `NULL` in, `NULL` out. A body with no house returns `NULL` from `ANGULAR`
 rather than a default. A name no sign or body carries is refused, and the
