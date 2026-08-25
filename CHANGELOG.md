@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased
+
+- The MansionSQL reference in the README now matches what the server answers.
+  `HAVING`, `OFFSET`, `DISTINCT`, `BETWEEN`, `EXISTS`, `CASE WHEN` and
+  subqueries after `IN` and `NOT IN` all worked and none of them was written
+  down, so the documented dialect was smaller than the real one and a caller
+  reading it had no way to find them.
+- Six astrological scalar functions are documented and are new on the server:
+  `ELEMENT`, `MODALITY`, `RULER`, `DIGNITY`, `DECAN` and `ANGULAR`. They work
+  wherever a column does, `GROUP BY ELEMENT(sign)` included.
+- Three refusals became specific. `AVG` and `SUM` over a text column now say
+  which column and that it is text, rather than dropping the rows they cannot
+  read and answering an average of the rest. `HAVING` without a `GROUP BY` is
+  refused and points at `WHERE`. A subquery selecting more than one column
+  says how many it selected.
+- The `NOT IN` behaviour when the inner set contains a `NULL` is written down.
+  It follows standard SQL, which means it returns no rows at all, and that
+  surprises people who have not met it before.
+
+  The client is unchanged: `query` forwards a statement and always did.
+
 ## 0.2.0
 
 - Releases are built and uploaded by GitHub Actions through PyPI Trusted

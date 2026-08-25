@@ -356,8 +356,16 @@ large table is always available.
 
 ### What the dialect supports
 
-`WHERE`, `ORDER BY`, `LIMIT`, `GROUP BY`, `COUNT`, `JOIN`, `LIKE`, `IN`, `AS`,
-and comparison on any column.
+`WHERE`, `GROUP BY`, `HAVING`, `ORDER BY`, `LIMIT`, `OFFSET`, `DISTINCT`,
+`JOIN`, `AS`, `IN`, `NOT IN`, `LIKE`, `BETWEEN`, `IS NULL`, `EXISTS`,
+`CASE WHEN`, and comparison and arithmetic on any column.
+
+Clauses apply in the SQL order, which is worth stating because it decides what
+`HAVING` sees and what the hundred-row cap counts:
+
+```
+FROM -> WHERE -> GROUP BY -> HAVING -> SELECT -> ORDER BY -> LIMIT
+```
 
 ```python
 # The tightest aspects first.
@@ -375,6 +383,133 @@ and comparison on any column.
 # The brightest fixed stars.
 "SELECT name, sign, dms, magnitude FROM stars ORDER BY magnitude LIMIT 10"
 ```
+
+#### Aggregates
+
+| Function | Argument | On an empty set | Notes |
+|---|---|---|---|
+| `COUNT(*)` | none | `0` | counts rows |
+| `COUNT(col)` | any | `0` | counts non-`NULL` values, so it can be smaller |
+| `MIN(col)` | number or text | `NULL` | text compares lexically |
+| `MAX(col)` | number or text | `NULL` | text compares lexically |
+| `AVG(col)` | number | `NULL` | refuses a text column |
+| `SUM(col)` | number | `NULL` | refuses a text column |
+
+`AVG` and `SUM` refuse a column that is not numeric rather than skipping the
+rows they cannot read. Skipping is the dangerous answer: over a column that is
+numeric for some rows and text for others it returns the average of part of the
+column with nothing to say the rest was dropped.
+
+```python
+client.query(birth={...}, sql="SELECT AVG(sign) AS v FROM planets")
+# ValidationError: AVG requires a numeric column; sign is text
+```
+
+`HAVING` filters groups after grouping, and its operands may be aggregates. It
+requires a `GROUP BY`: some engines allow it without one and read the whole
+result as a single group, but in practice a bare `HAVING` is a `WHERE` written
+in the wrong place, and saying so is more use than answering it.
+
+```python
+# Stellium: three or more bodies in one sign.
+"SELECT sign, COUNT(*) AS n FROM planets GROUP BY sign HAVING COUNT(*) >= 3"
+
+# Signs the chart moves slowly through.
+"SELECT sign, AVG(speed) AS v FROM planets GROUP BY sign HAVING AVG(speed) < 0"
+```
+
+An aggregate collapses rows, so `SELECT COUNT(*) FROM stars` is one row and
+never meets the hundred-row cap. The cap counts the final result, after
+`HAVING`.
+
+#### Astrological functions
+
+Scalar functions, usable anywhere a column is: in `SELECT`, `WHERE`,
+`GROUP BY`, `ORDER BY`, and inside an aggregate. All are lookups or integer
+arithmetic; none of them calculates anything further.
+
+| Function | Argument | Returns |
+|---|---|---|
+| `ELEMENT(sign)` | sign name | `fire`, `earth`, `air`, `water` |
+| `MODALITY(sign)` | sign name | `cardinal`, `fixed`, `mutable` |
+| `RULER(sign)` | sign name | the traditional ruler's name |
+| `DIGNITY(body, sign)` | body and sign names | `domicile`, `exaltation`, `detriment`, `fall`, `peregrine` |
+| `DECAN(longitude)` | degrees | `1`, `2` or `3` |
+| `ANGULAR(house)` | 1 to 12 | `angular`, `succedent`, `cadent` |
+| `ORB(a, b)` | two longitudes | their separation, never over 180 |
+| `SEPARATION(a, b)` | two longitudes | the same |
+| `ABS`, `ROUND`, `FLOOR`, `CEIL`, `SIGN` | a number | the usual arithmetic |
+
+`RULER` is the traditional rulership and only that: Mars for Scorpio, Saturn
+for Aquarius, Jupiter for Pisces. A modern variant would be a second answer to
+the same question decided by a setting the statement cannot show, so one query
+would mean two things; if it is wanted it will be a second function under its
+own name.
+
+`DIGNITY` is the classical seven-planet table. Anything outside the seven is
+`peregrine`, including Uranus, Neptune, Pluto and the asteroids: inventing a
+domicile for them would be inventing astrology rather than reading it.
+Triplicity, term and face are real dignities and are deliberately not reported,
+because they need a degree and a day-night distinction and this function is
+given a sign. Mercury in Virgo holds both domicile and exaltation and is
+reported as `domicile`.
+
+`NULL` in, `NULL` out. A body with no house returns `NULL` from `ANGULAR`
+rather than a default. A name no sign or body carries is refused, and the
+message quotes the value it was given:
+
+```python
+client.query(birth={...}, sql="SELECT ELEMENT('Lion') AS e FROM planets")
+# ValidationError: ELEMENT does not know the sign 'Lion'
+```
+
+```python
+# Elemental balance.
+"SELECT ELEMENT(sign) AS element, COUNT(*) AS n "
+"FROM planets GROUP BY ELEMENT(sign) ORDER BY n DESC"
+
+# Planets in their own sign.
+"SELECT name, sign FROM planets WHERE DIGNITY(name, sign) = 'domicile'"
+
+# The single tightest aspect in the chart.
+"SELECT MIN(orb) AS tightest FROM aspects"
+
+# Angular houses only, with the decan.
+"SELECT name, sign, DECAN(longitude) AS decan "
+"FROM planets WHERE ANGULAR(house) = 'angular'"
+```
+
+#### Subqueries
+
+A subquery may stand after `IN` or `NOT IN`, after `EXISTS`, or as a single
+value in the `SELECT` list. The inner statement may name a different table
+than the outer one; both charts are already calculated, so this filters data in
+hand rather than calculating a second time.
+
+```python
+# Everything aspecting a retrograde planet.
+"SELECT a, b, aspect, orb FROM aspects "
+"WHERE a IN (SELECT name FROM planets WHERE retrograde = 1)"
+```
+
+The inner statement must select exactly one column, and is told so by count:
+
+```python
+client.query(birth={...}, sql="SELECT a FROM aspects "
+                              "WHERE a IN (SELECT name, sign FROM planets)")
+# ValidationError: subquery must select one column, got 2
+```
+
+The hundred-row cap applies to the final answer only. An inner query may
+legitimately produce all 953 stars while the outer answer is three rows.
+
+`NOT IN` follows standard SQL where the inner set contains a `NULL`, which
+surprises people and is worth stating plainly: **if any inner value is `NULL`,
+`NOT IN` returns no rows at all.** The comparison is unknown rather than false,
+and unknown is not true, so nothing passes. `IN` is unaffected: it still
+matches the values that are there. Add `WHERE col IS NOT NULL` to the inner
+statement when the column has gaps. An empty inner set behaves the way the
+logic implies: `IN` matches nothing, `NOT IN` matches everything.
 
 Two charts in one statement, which is synastry written as a join:
 
