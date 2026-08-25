@@ -1,3 +1,5 @@
+![Astro Mansion — Official Python SDK](banner.webp)
+
 # AstroMansion
 
 [![PyPI](https://img.shields.io/pypi/v/astromansion)](https://pypi.org/project/astromansion/)
