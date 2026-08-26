@@ -94,6 +94,43 @@ chart = am.natal(date="1990-07-19", lat=41.0082, lon=28.9784)
 Applications should build a client instead: it holds a connection pool, and
 two of them can carry two different keys.
 
+## Practical examples
+
+The repository includes a complete, runnable natal-chart program and a
+cookbook for the main API workflows:
+
+- [`examples/natal_chart.py`](https://github.com/mustafayavuzak/astromansion-python/blob/main/examples/natal_chart.py)
+  prints a chart, its aspects, and Arabic lots.
+- [`EXAMPLES.md`](https://github.com/mustafayavuzak/astromansion-python/blob/main/EXAMPLES.md)
+  covers async requests, extended bodies,
+  synastry, predictive techniques, MansionSQL, rendered files, batch jobs,
+  and error handling.
+
+Three common calls use the same birth mapping:
+
+```python
+from astromansion import AstroMansion
+
+birth = {
+    "date": "1990-07-19",
+    "time": "14:30",
+    "lat": 41.0082,
+    "lon": 28.9784,
+    "timezone": "Europe/Istanbul",
+}
+
+with AstroMansion() as client:
+    natal = client.natal(birth)
+    transits = client.transits(birth, options={"year": 2027})
+    client.render_svg(birth, output="birth-chart.svg")
+
+print(natal.summary.Sun.sign)
+print(len(transits.data))
+```
+
+Methods accept either the mapping shown above or flat keyword arguments. Keep
+one style per call; mixing both is rejected before a request is sent.
+
 ## Async
 
 ```python
@@ -256,8 +293,7 @@ and read the group with `.get`. The chart's own bodies are calculated
 alongside the categories you name and the page is a window over that whole
 selection, so a small `catalog_limit` can fill the first page with planets
 and angles before a single star appears, leaving no `fixed_stars` key at all.
-`catalog_page.total` counts the same way, the whole selection rather than the
-category.
+`catalog_page.total` counts the whole selection rather than any one category.
 
 There is no ceiling on how many you may read this way. `options.all_bodies`
 walks every category at once and needs the full-catalog scope that comes with
@@ -595,7 +631,7 @@ client.query(birth={...}, sql="SELECT name, sign FROM planets LIMIT 1",
 
 ## Every endpoint
 
-Every published operation, 66 of them, has a method on both clients and a
+Every published operation, 67 of them, has a method on both clients and a
 module-level shortcut, all generated from the schema: `natal`, `transits`, `synastry`, `composite`,
 `solar_return`, `progression`, `harmonics`, `astrocartography`, `vedic_chart`,
 `zodiacal_releasing`, `firdaria`, `horary`, `electional` and the rest.
@@ -693,5 +729,6 @@ Also readable from `ASTROMANSION_BASE_URL`.
 
 ## Links
 
+- [Examples cookbook](https://github.com/mustafayavuzak/astromansion-python/blob/main/EXAMPLES.md)
 - [API reference](https://api.astromansion.com/docs)
 - [Documentation](https://astromansion.com/en/docs)

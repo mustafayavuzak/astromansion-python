@@ -59,6 +59,7 @@ packages = ["src/astromansion"]
 include = [
     "src/astromansion",
     "README.md",
+    "EXAMPLES.md",
     "CHANGELOG.md",
     "LICENSE",
     "pyproject.toml",
