@@ -28,8 +28,9 @@ class AstroMansion(SyncEndpoints):
         from astromansion import AstroMansion
 
         client = AstroMansion()
-        chart = client.natal(date="1990-07-19", time="14:30",
-                             lat=41.0082, lon=28.9784, timezone=3)
+        chart = client.natal(date="2000-01-01", time="12:00",
+                             lat=51.4779, lon=0.0,
+                             timezone="Europe/London")
         print(chart.summary.Sun.sign)
 
     The instance holds a connection pool, so build one and keep it. It is also
@@ -176,8 +177,8 @@ class AstroMansion(SyncEndpoints):
 
             found = client.bodies(
                 "fixed_stars", "arabic_lots",
-                date="1990-07-19", time="14:30",
-                lat=41.0082, lon=28.9784, timezone=3,
+                date="2000-01-01", time="12:00",
+                lat=51.4779, lon=0.0, timezone="Europe/London",
             )
             found["fixed_stars"]   # every star
             found["arabic_lots"]   # every lot

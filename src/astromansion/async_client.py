@@ -28,8 +28,8 @@ class AsyncAstroMansion(AsyncEndpoints):
 
         async with AsyncAstroMansion() as client:
             chart = await client.natal(
-                date="1990-07-19", time="14:30",
-                lat=41.0082, lon=28.9784, timezone=3,
+                date="2000-01-01", time="12:00",
+                lat=51.4779, lon=0.0, timezone="Europe/London",
             )
 
     :param api_key: API key. Falls back to ``ASTROMANSION_API_KEY``.
@@ -145,8 +145,8 @@ class AsyncAstroMansion(AsyncEndpoints):
 
             found = client.bodies(
                 "fixed_stars", "arabic_lots",
-                date="1990-07-19", time="14:30",
-                lat=41.0082, lon=28.9784, timezone=3,
+                date="2000-01-01", time="12:00",
+                lat=51.4779, lon=0.0, timezone="Europe/London",
             )
             found["fixed_stars"]   # every star
             found["arabic_lots"]   # every lot

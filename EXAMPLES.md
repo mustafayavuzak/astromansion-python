@@ -12,11 +12,11 @@ The examples use this birth data:
 
 ```python
 BIRTH = {
-    "date": "1990-07-19",
-    "time": "14:30",
-    "lat": 41.0082,
-    "lon": 28.9784,
-    "timezone": "Europe/Istanbul",
+    "date": "2000-01-01",
+    "time": "12:00",
+    "lat": 51.4779,
+    "lon": 0.0,
+    "timezone": "Europe/London",
 }
 ```
 
@@ -33,11 +33,11 @@ it materially affects the example.
 from astromansion import AstroMansion
 
 BIRTH = {
-    "date": "1990-07-19",
-    "time": "14:30",
-    "lat": 41.0082,
-    "lon": 28.9784,
-    "timezone": "Europe/Istanbul",
+    "date": "2000-01-01",
+    "time": "12:00",
+    "lat": 51.4779,
+    "lon": 0.0,
+    "timezone": "Europe/London",
 }
 
 with AstroMansion() as client:
@@ -93,7 +93,7 @@ pooling in both synchronous and asynchronous programs.
 from astromansion import AstroMansion
 
 with AstroMansion() as client:
-    matches = client.search_places(q="Kadıköy", limit=5, lang="tr")
+    matches = client.search_places(q="Greenwich", limit=5, lang="en")
 
 for place in matches.data["results"]:
     print(place["label"], place["lat"], place["lon"])
@@ -155,9 +155,9 @@ from astromansion import AstroMansion
 PARTNER = {
     "date": "1992-11-03",
     "time": "08:15",
-    "lat": 39.9334,
-    "lon": 32.8597,
-    "timezone": "Europe/Istanbul",
+    "lat": 48.8566,
+    "lon": 2.3522,
+    "timezone": "Europe/Paris",
 }
 
 with AstroMansion() as client:
@@ -165,7 +165,7 @@ with AstroMansion() as client:
     compatibility = client.compatibility(
         BIRTH,
         PARTNER,
-        options={"language": "en", "names": ["Alex", "Deniz"]},
+        options={"language": "en", "names": ["Alex", "Morgan"]},
     )
 
 print(synastry.data)

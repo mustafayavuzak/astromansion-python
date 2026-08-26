@@ -9,14 +9,15 @@ Two surfaces, one behaviour:
 
     >>> from astromansion import AstroMansion
     >>> with AstroMansion() as client:   # reads ASTROMANSION_API_KEY
-    ...     chart = client.natal(date="1990-07-19", time="14:30",
-    ...                          lat=41.0082, lon=28.9784, timezone=3)
+    ...     chart = client.natal(date="2000-01-01", time="12:00",
+    ...                          lat=51.4779, lon=0.0,
+    ...                          timezone="Europe/London")
 
 and, for a notebook or a short script:
 
     >>> import astromansion as am
     >>> am.set_api_key("...")
-    >>> chart = am.natal(date="1990-07-19", lat=41.0082, lon=28.9784)
+    >>> chart = am.natal(date="2000-01-01", lat=51.4779, lon=0.0)
 
 The client object is the one to use in an application: it holds a connection
 pool, and two of them can carry two different keys.

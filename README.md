@@ -42,15 +42,15 @@ from astromansion import AstroMansion
 client = AstroMansion()
 
 chart = client.natal(
-    date="1990-07-19",
-    time="14:30",
-    lat=41.0082,
-    lon=28.9784,
-    timezone=3,
+    date="2000-01-01",
+    time="12:00",
+    lat=51.4779,
+    lon=0.0,
+    timezone="Europe/London",
 )
 
-print(chart.summary.Sun.sign)  # Cancer
-print(chart.planets[0].house)  # 9
+print(chart.summary.Sun.sign)
+print(chart.planets[0].house)
 ```
 
 Birth data is passed flat. The API nests it under `birth`; the client does
@@ -63,7 +63,7 @@ Fields: `date` as `YYYY-MM-DD`, `time` as `HH:MM` (omit if unknown), `lat` and
 You can pass a mapping instead of keywords, but not both at once:
 
 ```python
-chart = client.natal({"date": "1990-07-19", "lat": 41.0082, "lon": 28.9784})
+chart = client.natal({"date": "2000-01-01", "lat": 51.4779, "lon": 0.0})
 ```
 
 ## Where the key comes from
@@ -88,7 +88,7 @@ For a notebook or a one-file script:
 import astromansion as am
 
 am.set_api_key("your key")  # or rely on the environment
-chart = am.natal(date="1990-07-19", lat=41.0082, lon=28.9784)
+chart = am.natal(date="2000-01-01", lat=51.4779, lon=0.0)
 ```
 
 Applications should build a client instead: it holds a connection pool, and
@@ -112,11 +112,11 @@ Three common calls use the same birth mapping:
 from astromansion import AstroMansion
 
 birth = {
-    "date": "1990-07-19",
-    "time": "14:30",
-    "lat": 41.0082,
-    "lon": 28.9784,
-    "timezone": "Europe/Istanbul",
+    "date": "2000-01-01",
+    "time": "12:00",
+    "lat": 51.4779,
+    "lon": 0.0,
+    "timezone": "Europe/London",
 }
 
 with AstroMansion() as client:
@@ -138,11 +138,11 @@ from astromansion import AsyncAstroMansion
 
 async with AsyncAstroMansion() as client:
     chart = await client.natal(
-        date="1990-07-19",
-        time="14:30",
-        lat=41.0082,
-        lon=28.9784,
-        timezone=3,
+        date="2000-01-01",
+        time="12:00",
+        lat=51.4779,
+        lon=0.0,
+        timezone="Europe/London",
     )
 ```
 
@@ -169,7 +169,7 @@ response reads the same way and you never have to remember which kind you
 called:
 
 ```python
-chart = client.vedic_chart(date="1990-07-19", lat=41.0082, lon=28.9784)
+chart = client.vedic_chart(date="2000-01-01", lat=51.4779, lon=0.0)
 
 chart.data          # the payload, wrapper removed
 chart.technique     # what the server called it, when it said
@@ -187,8 +187,8 @@ through `options.categories`:
 
 ```python
 lots = client.chart(
-    date="1990-07-19", time="14:30",
-    lat=41.0082, lon=28.9784, timezone=3,
+    date="2000-01-01", time="12:00",
+    lat=51.4779, lon=0.0, timezone="Europe/London",
     options={"categories": ["arabic_lots"]},
 )
 
@@ -215,8 +215,8 @@ paging:
 ```python
 found = client.bodies(
     "fixed_stars", "arabic_lots",
-    date="1990-07-19", time="14:30",
-    lat=41.0082, lon=28.9784, timezone=3,
+    date="2000-01-01", time="12:00",
+    lat=51.4779, lon=0.0, timezone="Europe/London",
 )
 
 len(found["fixed_stars"])  # 906, in six requests
@@ -574,7 +574,8 @@ rows = client.query(
     birth={"date": "2000-01-01", "time": "12:00",
            "lat": 51.4779, "lon": 0.0, "timezone": 0},
     partner={"date": "1995-03-14", "time": "08:20",
-             "lat": 41.0082, "lon": 28.9784, "timezone": 3},
+             "lat": 48.8566, "lon": 2.3522,
+             "timezone": "Europe/Paris"},
     sql="SELECT a.name, a.sign, b.name AS partner "
         "FROM natal_a a JOIN natal_b b ON a.sign = b.sign LIMIT 50",
 )
@@ -650,7 +651,7 @@ Authentication, timeouts, retries and error handling behave identically there.
 from astromansion import QuotaExceededError, RateLimitError
 
 try:
-    chart = client.natal(date="1990-07-19", lat=41.0, lon=29.0)
+    chart = client.natal(date="2000-01-01", lat=51.4779, lon=0.0)
 except RateLimitError as error:
     print("wait", error.retry_after, "seconds")
 except QuotaExceededError:
@@ -689,7 +690,7 @@ client = AstroMansion(timeout=60.0, max_retries=0)
 ## Documents
 
 ```python
-pdf = client.export_pdf(date="1990-07-19", lat=41.0082, lon=28.9784)
+pdf = client.export_pdf(date="2000-01-01", lat=51.4779, lon=0.0)
 
 with open("chart.pdf", "wb") as file:
     file.write(pdf)
@@ -698,7 +699,7 @@ with open("chart.pdf", "wb") as file:
 Or name a path and let the client write it:
 
 ```python
-client.export_pdf(date="1990-07-19", lat=41.0082, lon=28.9784, output="chart.pdf")
+client.export_pdf(date="2000-01-01", lat=51.4779, lon=0.0, output="chart.pdf")
 ```
 
 Every endpoint that answers with a document takes `output` the same way:
@@ -706,7 +707,7 @@ Every endpoint that answers with a document takes `output` the same way:
 `render_sharecard`, on both clients.
 
 ```python
-client.render_svg(date="1990-07-19", lat=41.0082, lon=28.9784, output="wheel.svg")
+client.render_svg(date="2000-01-01", lat=51.4779, lon=0.0, output="wheel.svg")
 ```
 
 Nothing is written to disk unless you name a path, so a call cannot overwrite
