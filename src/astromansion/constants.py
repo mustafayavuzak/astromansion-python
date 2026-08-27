@@ -14,7 +14,7 @@ from typing import Final
 class Package:
     """Identity this package presents to the API."""
 
-    VERSION: Final[str] = "0.2.2"
+    VERSION: Final[str] = "0.2.3"
     #: Matches the name on PyPI, so a server log names what to install.
     NAME: Final[str] = "astromansion"
 

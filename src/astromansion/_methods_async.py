@@ -9,7 +9,7 @@ Endpoints: 67
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal, overload
 from urllib.parse import quote
 
 from . import _core
@@ -26,6 +26,30 @@ class AsyncEndpoints:
 
     if TYPE_CHECKING:
 
+        @overload
+        async def request(
+            self,
+            method: str,
+            path: str,
+            *,
+            binary: Literal[False] = ...,
+            technique: str | None = ...,
+            enveloped: bool | None = ...,
+            **kwargs: Any,
+        ) -> Result: ...
+
+        @overload
+        async def request(
+            self,
+            method: str,
+            path: str,
+            *,
+            binary: Literal[True],
+            technique: str | None = ...,
+            enveloped: bool | None = ...,
+            **kwargs: Any,
+        ) -> bytes: ...
+
         async def request(
             self,
             method: str,
@@ -35,7 +59,33 @@ class AsyncEndpoints:
             technique: str | None = ...,
             enveloped: bool | None = ...,
             **kwargs: Any,
-        ) -> Any: ...
+        ) -> Result | bytes: ...
+
+        @overload
+        async def _chart(
+            self,
+            path: str,
+            payload: dict[str, Any] | None,
+            options: dict[str, Any] | None,
+            *,
+            binary: Literal[False] = ...,
+            technique: str | None = ...,
+            enveloped: bool | None = ...,
+            **fields: Any,
+        ) -> Result: ...
+
+        @overload
+        async def _chart(
+            self,
+            path: str,
+            payload: dict[str, Any] | None,
+            options: dict[str, Any] | None,
+            *,
+            binary: Literal[True],
+            technique: str | None = ...,
+            enveloped: bool | None = ...,
+            **fields: Any,
+        ) -> bytes: ...
 
         async def _chart(
             self,
@@ -47,7 +97,35 @@ class AsyncEndpoints:
             technique: str | None = ...,
             enveloped: bool | None = ...,
             **fields: Any,
-        ) -> Any: ...
+        ) -> Result | bytes: ...
+
+        @overload
+        async def _pair(
+            self,
+            path: str,
+            birth: dict[str, Any],
+            partner: dict[str, Any],
+            options: dict[str, Any] | None,
+            *,
+            binary: Literal[False] = ...,
+            technique: str | None = ...,
+            enveloped: bool | None = ...,
+            **extra: Any,
+        ) -> Result: ...
+
+        @overload
+        async def _pair(
+            self,
+            path: str,
+            birth: dict[str, Any],
+            partner: dict[str, Any],
+            options: dict[str, Any] | None,
+            *,
+            binary: Literal[True],
+            technique: str | None = ...,
+            enveloped: bool | None = ...,
+            **extra: Any,
+        ) -> bytes: ...
 
         async def _pair(
             self,
@@ -60,10 +138,10 @@ class AsyncEndpoints:
             technique: str | None = ...,
             enveloped: bool | None = ...,
             **extra: Any,
-        ) -> Any: ...
+        ) -> Result | bytes: ...
 
         @staticmethod
-        def _document(content: Any, output: str | Path | None) -> Any: ...
+        def _document(content: bytes, output: str | Path | None) -> bytes | Path: ...
 
     async def almanac(
         self,

@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.2.3
+
+- Generated endpoint methods now preserve the transport's concrete return
+  type: JSON operations are statically known as `Result`, while document
+  operations are known as `bytes` before an optional output path is applied.
+  The former generator exposed those shared hooks as `Any` and disabled
+  `warn_return_any`, allowing 138 strict type errors to remain hidden behind
+  otherwise accurate public annotations. The suppression is gone and the
+  complete source tree now passes unmodified strict mypy checks.
+  Runtime behavior and the public request surface are unchanged.
+- The PyPI release workflow now pins every GitHub Action to an immutable
+  commit and lets Dependabot propose weekly action and dependency updates.
+  Trusted Publishing still uses short-lived OIDC credentials; no upload token
+  is stored in the repository.
+- Release tests now run on every declared Python version from 3.10 through
+  3.13, and reject formatting drift before a distribution can be published.
+
 ## 0.2.2
 
 - A subquery after `IN` or `NOT IN` now runs once instead of once for every row

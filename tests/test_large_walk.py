@@ -16,8 +16,12 @@ BIRTH = {"date": "2000-01-01", "lat": 51.4779, "lon": 0.0}
 def _page(total: int, following: int | None, rows: int = 160) -> dict:
     return {
         "bodies": {"asteroids": [{"name": f"a{i}"} for i in range(rows)]},
-        "catalog_page": {"offset": 0, "limit": 160, "total": total,
-                         "next_offset": following},
+        "catalog_page": {
+            "offset": 0,
+            "limit": 160,
+            "total": total,
+            "next_offset": following,
+        },
     }
 
 
@@ -44,8 +48,7 @@ def test_confirming_reads_it_anyway(respx_mock: respx.Router) -> None:
     respx_mock.post("/v1/chart").mock(
         side_effect=lambda request: httpx.Response(200, json=next(served)),
     )
-    found = AstroMansion(api_key=KEY).bodies(
-        "asteroids", confirm_large=True, **BIRTH)
+    found = AstroMansion(api_key=KEY).bodies("asteroids", confirm_large=True, **BIRTH)
     assert len(found["asteroids"]) == 320
 
 
@@ -71,9 +74,12 @@ def test_progress_is_reported_page_by_page(respx_mock: respx.Router) -> None:
     )
     seen: list[tuple[int, int, int]] = []
     AstroMansion(api_key=KEY).bodies(
-        "asteroids", confirm_large=True, **BIRTH,
+        "asteroids",
+        confirm_large=True,
+        **BIRTH,
         on_page=lambda done, left, rows: seen.append(
-            (done, left, len(rows["asteroids"]))),
+            (done, left, len(rows["asteroids"]))
+        ),
     )
     assert [row[0] for row in seen] == [1, 2, 3]
     assert seen[0][1] == 176

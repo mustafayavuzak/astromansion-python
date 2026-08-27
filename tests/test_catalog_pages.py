@@ -16,20 +16,33 @@ from astromansion import (
 
 BASE = "https://api.astromansion.com"
 KEY = "am_test_key"
-BIRTH = {"date": "2000-01-01", "time": "12:00",
-         "lat": 51.4779, "lon": 0.0, "timezone": 3}
+BIRTH = {
+    "date": "2000-01-01",
+    "time": "12:00",
+    "lat": 51.4779,
+    "lon": 0.0,
+    "timezone": 3,
+}
 
 # Measured against the live API at catalog_limit=10: the chart's own bodies
 # fill the window first, so the opening page carries no star at all and the
 # ``fixed_stars`` key is simply absent.
 PAGES = [
-    {"bodies": {"planets": [{"name": "Sun"}] * 10},
-     "catalog_page": {"offset": 0, "total": 25, "next_offset": 10}},
-    {"bodies": {"points": [{"name": "Asc"}] * 5,
-                "fixed_stars": [{"name": f"S{i}"} for i in range(5)]},
-     "catalog_page": {"offset": 10, "total": 25, "next_offset": 20}},
-    {"bodies": {"fixed_stars": [{"name": f"T{i}"} for i in range(5)]},
-     "catalog_page": {"offset": 20, "total": 25, "next_offset": None}},
+    {
+        "bodies": {"planets": [{"name": "Sun"}] * 10},
+        "catalog_page": {"offset": 0, "total": 25, "next_offset": 10},
+    },
+    {
+        "bodies": {
+            "points": [{"name": "Asc"}] * 5,
+            "fixed_stars": [{"name": f"S{i}"} for i in range(5)],
+        },
+        "catalog_page": {"offset": 10, "total": 25, "next_offset": 20},
+    },
+    {
+        "bodies": {"fixed_stars": [{"name": f"T{i}"} for i in range(5)]},
+        "catalog_page": {"offset": 20, "total": 25, "next_offset": None},
+    },
 ]
 STARS = ["S0", "S1", "S2", "S3", "S4", "T0", "T1", "T2", "T3", "T4"]
 
@@ -68,8 +81,9 @@ def test_each_request_asks_for_the_largest_page_the_api_serves(
     route = _serve(respx_mock)
     AstroMansion(api_key=KEY).bodies("fixed_stars", **BIRTH)
     first = route.calls[0].request
-    assert b'"catalog_limit": 160' in first.content.replace(b'"catalog_limit":160',
-                                                            b'"catalog_limit": 160')
+    assert b'"catalog_limit": 160' in first.content.replace(
+        b'"catalog_limit":160', b'"catalog_limit": 160'
+    )
 
 
 @respx.mock(base_url=BASE)
@@ -87,8 +101,10 @@ def test_the_offsets_come_from_the_api_rather_than_being_counted_here(
 @respx.mock(base_url=BASE)
 def test_several_categories_are_read_in_one_walk(respx_mock: respx.Router) -> None:
     pages = [
-        {"bodies": {"fixed_stars": [{"name": "S"}], "arabic_lots": [{"name": "L"}]},
-         "catalog_page": {"next_offset": None}},
+        {
+            "bodies": {"fixed_stars": [{"name": "S"}], "arabic_lots": [{"name": "L"}]},
+            "catalog_page": {"next_offset": None},
+        },
     ]
     served = iter(pages)
     route = respx_mock.post("/v1/chart").mock(

@@ -28,6 +28,7 @@ def _client(**kwargs: object) -> AstroMansion:
 
 # --- a path parameter must reach the URL -----------------------------------
 
+
 @respx.mock(base_url=BASE)
 def test_a_named_body_reaches_its_own_path(respx_mock: respx.Router) -> None:
     """0.1.3 sent the template itself, so every call hit ``/{name}``."""
@@ -61,6 +62,7 @@ def test_no_generated_url_still_carries_a_template() -> None:
 
 
 # --- the key must not leave the API ----------------------------------------
+
 
 @pytest.mark.parametrize(
     "target",
@@ -102,12 +104,14 @@ def test_no_request_leaves_for_another_host_at_all() -> None:
 
 # --- a spent quota is not a busy moment ------------------------------------
 
+
 @respx.mock(base_url=BASE)
 def test_a_spent_quota_is_asked_about_once(respx_mock: respx.Router) -> None:
     """0.1.3 spent three round trips to be told the same thing."""
     route = respx_mock.post("/v1/natal").mock(
         httpx.Response(
-            429, json={"error": {"code": "quota_exceeded", "message": "spent"}},
+            429,
+            json={"error": {"code": "quota_exceeded", "message": "spent"}},
         ),
     )
     with pytest.raises(QuotaExceededError):
@@ -178,6 +182,7 @@ def test_the_quota_exception_is_still_the_one_raised(
 
 # --- a partial catalog walk must not look complete -------------------------
 
+
 @respx.mock(base_url=BASE)
 def test_a_walk_that_never_ends_is_refused_rather_than_truncated(
     respx_mock: respx.Router,
@@ -186,12 +191,15 @@ def test_a_walk_that_never_ends_is_refused_rather_than_truncated(
     # The offset advances every time, so the walk is well formed and only the
     # ceiling can end it. An endlessly paging API must not read as a complete
     # answer that happens to be short.
-    served = iter(range(1, 10 ** 6))
+    served = iter(range(1, 10**6))
     route = respx_mock.post("/v1/chart").mock(
-        side_effect=lambda request: httpx.Response(200, json={
-            "bodies": {"fixed_stars": [{"name": "S"}]},
-            "catalog_page": {"next_offset": next(served) * Catalog.PAGE_MAX},
-        }),
+        side_effect=lambda request: httpx.Response(
+            200,
+            json={
+                "bodies": {"fixed_stars": [{"name": "S"}]},
+                "catalog_page": {"next_offset": next(served) * Catalog.PAGE_MAX},
+            },
+        ),
     )
     with pytest.raises(ServerError):
         _client().bodies("fixed_stars", **BIRTH)
@@ -204,10 +212,13 @@ def test_a_walk_told_to_stand_still_is_refused(
 ) -> None:
     """An offset that does not advance would read one page forever."""
     route = respx_mock.post("/v1/chart").mock(
-        httpx.Response(200, json={
-            "bodies": {"fixed_stars": [{"name": "S"}]},
-            "catalog_page": {"next_offset": 0},
-        }),
+        httpx.Response(
+            200,
+            json={
+                "bodies": {"fixed_stars": [{"name": "S"}]},
+                "catalog_page": {"next_offset": 0},
+            },
+        ),
     )
     with pytest.raises(ServerError):
         _client().bodies("fixed_stars", **BIRTH)

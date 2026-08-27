@@ -42,6 +42,10 @@ class Result(Mapping[str, Any]):
 
     __slots__ = ("_data", "_raw", "_technique")
 
+    _data: Any
+    _raw: Any
+    _technique: str | None
+
     #: The two keys an envelope carries, and nothing else. Consulted only
     #: where the schema does not say: a payload that merely happens to own a
     #: ``result`` field keeps more keys than these and is left alone.

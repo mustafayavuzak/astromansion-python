@@ -89,6 +89,3 @@ ignore = ["RUF001", "RUF002", "RUF003"]
 python_version = "3.10"
 strict = true
 files = ["src"]
-# The transport hands back either JSON or a document, so the shared hooks are
-# typed loosely and each generated method states the narrower type it returns.
-warn_return_any = false

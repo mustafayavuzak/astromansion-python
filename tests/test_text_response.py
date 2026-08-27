@@ -20,11 +20,14 @@ BOX = "┌────────┬───────────┐\n│ n
 def _client(content: bytes, content_type: str) -> AstroMansion:
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(
-            200, content=content, headers={"Content-Type": content_type},
+            200,
+            content=content,
+            headers={"Content-Type": content_type},
         )
 
     return AstroMansion(
-        api_key="test", base_url="https://api.example",
+        api_key="test",
+        base_url="https://api.example",
         transport=httpx.MockTransport(handler),
     )
 
@@ -33,8 +36,7 @@ def test_rendered_table_arrives_as_text() -> None:
     """A ``text/plain`` answer is printable without decoding it by hand."""
     client = _client(BOX.encode(), "text/plain; charset=utf-8")
 
-    answer = client.query(birth={"date": "2000-01-01"}, sql="SELECT 1",
-                          format="box")
+    answer = client.query(birth={"date": "2000-01-01"}, sql="SELECT 1", format="box")
 
     assert isinstance(answer, str)
     assert answer == BOX

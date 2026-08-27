@@ -1,8 +1,8 @@
 """Generate the client method table from the published OpenAPI schema.
 
-Every endpoint the SDK exposes is derived here, never typed by hand. The API
-publishes 64 operations; writing them out by hand would guarantee that one is
-missed today and that the list rots the first time the API changes.
+Every endpoint the SDK exposes is derived here, never typed by hand. Writing
+the published operations out manually would guarantee that one is missed and
+that the list drifts the first time the API changes.
 
 Run after an API change::
 
@@ -293,15 +293,14 @@ def path_arguments(path: str) -> dict[str, str]:
     :param path: Path template from the schema.
     :returns: The ``argspec`` and ``pathexpr`` the signature templates want.
     """
-    holders = [
-        part.strip("{}") for part in path.split("/") if part.startswith("{")
-    ]
+    holders = [part.strip("{}") for part in path.split("/") if part.startswith("{")]
     if not holders:
         return {"argspec": "", "pathexpr": repr(path)}
     quoted = path
     for holder in holders:
         quoted = quoted.replace(
-            "{" + holder + "}", "{quote(str(" + holder + "), safe='')}",
+            "{" + holder + "}",
+            "{quote(str(" + holder + "), safe='')}",
         )
     return {
         "argspec": "".join(f", {holder}: str" for holder in holders),
@@ -331,9 +330,7 @@ def emit_methods(endpoints, is_async: bool) -> str:
         # A binary endpoint answers with a document, so it accepts a path to
         # write it to. Every one of them, rather than whichever was asked for
         # first: a caller should not have to remember which can save itself.
-        common["outarg"] = (
-            " output: str | Path | None = None," if e.binary else ""
-        )
+        common["outarg"] = " output: str | Path | None = None," if e.binary else ""
         common["outopen"] = "self._document(" if e.binary else ""
         common["outclose"] = ", output)" if e.binary else ""
         if e.kind == "chart":
@@ -350,9 +347,7 @@ def emit_methods(endpoints, is_async: bool) -> str:
                 )
             )
         else:
-            out.append(
-                GET_SIGNATURE.format(**path_arguments(e.path), **common)
-            )
+            out.append(GET_SIGNATURE.format(**path_arguments(e.path), **common))
     return "\n".join(out)
 
 
@@ -364,15 +359,24 @@ def format_generated() -> None:
     """
     import subprocess
 
-    paths = [str(TARGET.parent / name) for name in (
-        "_methods.py", "_methods_async.py", "_shortcuts.py", "_endpoints.py",
-    )]
+    paths = [
+        str(TARGET.parent / name)
+        for name in (
+            "_methods.py",
+            "_methods_async.py",
+            "_shortcuts.py",
+            "_endpoints.py",
+        )
+    ]
     for argv in (
         [sys.executable, "-m", "ruff", "check", "--fix", "--quiet", *paths],
         [sys.executable, "-m", "ruff", "format", "--quiet", *paths],
     ):
         result = subprocess.run(
-            argv, capture_output=True, text=True, check=False,
+            argv,
+            capture_output=True,
+            text=True,
+            check=False,
         )
         if result.returncode:
             print(result.stderr, file=sys.stderr)
@@ -391,7 +395,7 @@ Endpoints: {count}
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal, overload
 from urllib.parse import quote
 
 from . import _core
@@ -407,25 +411,65 @@ class {cls}:
     """
 
     if TYPE_CHECKING:
+        @overload
+        {aw}def request(
+            self, method: str, path: str, *, binary: Literal[False] = ...,
+            technique: str | None = ..., enveloped: bool | None = ..., **kwargs: Any,
+        ) -> Result: ...
+
+        @overload
+        {aw}def request(
+            self, method: str, path: str, *, binary: Literal[True],
+            technique: str | None = ..., enveloped: bool | None = ..., **kwargs: Any,
+        ) -> bytes: ...
+
         {aw}def request(
             self, method: str, path: str, *, binary: bool = ...,
             technique: str | None = ..., enveloped: bool | None = ..., **kwargs: Any,
-        ) -> Any: ...
+        ) -> Result | bytes: ...
+
+        @overload
+        {aw}def _chart(
+            self, path: str, payload: dict[str, Any] | None,
+            options: dict[str, Any] | None, *, binary: Literal[False] = ...,
+            technique: str | None = ..., enveloped: bool | None = ..., **fields: Any,
+        ) -> Result: ...
+
+        @overload
+        {aw}def _chart(
+            self, path: str, payload: dict[str, Any] | None,
+            options: dict[str, Any] | None, *, binary: Literal[True],
+            technique: str | None = ..., enveloped: bool | None = ..., **fields: Any,
+        ) -> bytes: ...
 
         {aw}def _chart(
             self, path: str, payload: dict[str, Any] | None,
             options: dict[str, Any] | None, *, binary: bool = ...,
             technique: str | None = ..., enveloped: bool | None = ..., **fields: Any,
-        ) -> Any: ...
+        ) -> Result | bytes: ...
+
+        @overload
+        {aw}def _pair(
+            self, path: str, birth: dict[str, Any], partner: dict[str, Any],
+            options: dict[str, Any] | None, *, binary: Literal[False] = ...,
+            technique: str | None = ..., enveloped: bool | None = ..., **extra: Any,
+        ) -> Result: ...
+
+        @overload
+        {aw}def _pair(
+            self, path: str, birth: dict[str, Any], partner: dict[str, Any],
+            options: dict[str, Any] | None, *, binary: Literal[True],
+            technique: str | None = ..., enveloped: bool | None = ..., **extra: Any,
+        ) -> bytes: ...
 
         {aw}def _pair(
             self, path: str, birth: dict[str, Any], partner: dict[str, Any],
             options: dict[str, Any] | None, *, binary: bool = ...,
             technique: str | None = ..., enveloped: bool | None = ..., **extra: Any,
-        ) -> Any: ...
+        ) -> Result | bytes: ...
 
         @staticmethod
-        def _document(content: Any, output: str | Path | None) -> Any: ...
+        def _document(content: bytes, output: str | Path | None) -> bytes | Path: ...
 
 '''
     root = TARGET.parent

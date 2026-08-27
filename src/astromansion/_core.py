@@ -140,7 +140,7 @@ class Backoff:
             Retry.BACKOFF_SECONDS * (2**attempt),
             Retry.BACKOFF_CEILING,
         )
-        return window * (0.5 + random.random() / 2.0)
+        return float(window * (0.5 + random.random() / 2.0))
 
 
 class Envelope:

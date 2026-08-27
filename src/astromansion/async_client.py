@@ -190,8 +190,7 @@ class AsyncAstroMansion(AsyncEndpoints):
             if requests == 1 and not confirm_large:
                 _core.Pages.guard_size(page, page_size, categories)
             if on_page is not None:
-                on_page(requests, _core.Pages.remaining(page, page_size),
-                        collected)
+                on_page(requests, _core.Pages.remaining(page, page_size), collected)
             if following is None:
                 return collected
             offset = following
@@ -242,10 +241,15 @@ class AsyncAstroMansion(AsyncEndpoints):
         """
         # Three call styles reach the same body: two mappings positionally,
         # the same as keywords, or one chart's fields passed flat.
-        chart = dict(birth) if birth is not None else {
-            key: extra.pop(key) for key in list(extra)
-            if key in config.Body.BIRTH_FIELDS
-        }
+        chart = (
+            dict(birth)
+            if birth is not None
+            else {
+                key: extra.pop(key)
+                for key in list(extra)
+                if key in config.Body.BIRTH_FIELDS
+            }
+        )
         body: dict[str, Any] = {"birth": config.Body.birth(**chart), "type": type}
         if partner is not None:
             body["partner"] = config.Body.birth(**partner)
@@ -257,17 +261,21 @@ class AsyncAstroMansion(AsyncEndpoints):
             body["names"] = list(names)
         if lang is not None:
             body["lang"] = lang
-        body.update({key: value for key, value in extra.items()
-                     if value is not None})
+        body.update({key: value for key, value in extra.items() if value is not None})
         return self._document(
-            await self.request("POST", "/v1/render/sharecard", json=body,
-                         binary=True, technique="render_sharecard",
-                         enveloped=None),
+            await self.request(
+                "POST",
+                "/v1/render/sharecard",
+                json=body,
+                binary=True,
+                technique="render_sharecard",
+                enveloped=None,
+            ),
             output,
         )
 
     @staticmethod
-    def _document(content: Any, output: str | Path | None) -> Any:
+    def _document(content: bytes, output: str | Path | None) -> bytes | Path:
         """Return a document, or the path it was written to.
 
         Bytes come back unless a path is named, so a call cannot overwrite a
@@ -277,7 +285,7 @@ class AsyncAstroMansion(AsyncEndpoints):
         :param output: Path to write to, or ``None`` to keep the bytes.
         :returns: The bytes, or the path written.
         """
-        if output is None or not isinstance(content, bytes):
+        if output is None:
             return content
         destination = Path(output)
         destination.write_bytes(content)
