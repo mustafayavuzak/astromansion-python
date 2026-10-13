@@ -25,7 +25,7 @@ jobs:
       - run: ruff check src tests
       - run: ruff format --check src tests tools
       - run: mypy src/astromansion
-      - run: pytest tests -q
+      - run: pytest -q
 
   build:
     needs: test
@@ -43,7 +43,7 @@ jobs:
       - name: Tag must match the package version
         run: |
           version=$(python -c "import tomllib,pathlib,re;\
-            src=pathlib.Path('src/astromansion/constants.py').read_text();\
+            src=pathlib.Path('src/astromansion/models/constants/package.py').read_text();\
             print(re.search(r'VERSION: Final\[str\] = \"([^\"]+)\"', src).group(1))")
           if [ "refs/tags/v$version" != "$GITHUB_REF" ]; then
             echo "tag $GITHUB_REF does not match version $version" >&2

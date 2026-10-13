@@ -12,7 +12,7 @@ import httpx
 import pytest
 
 from astromansion import AstroMansion
-from astromansion._core import Media
+from astromansion._responses import Responses
 
 BOX = "┌────────┬───────────┐\n│ name   │ sign      │\n└────────┴───────────┘"
 
@@ -82,7 +82,7 @@ def test_csv_and_svg_stay_bytes(content_type: str) -> None:
 )
 def test_media_reads_the_header(header: str | None, expected: bool) -> None:
     """The parameter, the case and the whitespace must not decide the answer."""
-    assert Media.is_text(header) is expected
+    assert Responses.is_text(header) is expected
 
 
 def test_a_missing_content_type_stays_bytes() -> None:

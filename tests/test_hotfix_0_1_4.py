@@ -15,7 +15,7 @@ from astromansion import (
     ServerError,
     ValidationError,
 )
-from astromansion.constants import Catalog
+from astromansion.models.constants.catalog import CatalogConstants
 
 BASE = "https://api.astromansion.com"
 KEY = "am_secret_key"
@@ -197,13 +197,15 @@ def test_a_walk_that_never_ends_is_refused_rather_than_truncated(
             200,
             json={
                 "bodies": {"fixed_stars": [{"name": "S"}]},
-                "catalog_page": {"next_offset": next(served) * Catalog.PAGE_MAX},
+                "catalog_page": {
+                    "next_offset": next(served) * CatalogConstants.PAGE_MAX
+                },
             },
         ),
     )
     with pytest.raises(ServerError):
         _client().bodies("fixed_stars", **BIRTH)
-    assert route.call_count == Catalog.PAGE_CEILING
+    assert route.call_count == CatalogConstants.PAGE_CEILING
 
 
 @respx.mock(base_url=BASE)

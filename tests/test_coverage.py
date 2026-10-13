@@ -12,22 +12,23 @@ import pytest
 
 import astromansion
 from astromansion import AstroMansion, AsyncAstroMansion
-from astromansion._endpoints import BY_NAME, ENDPOINTS
+from astromansion.models.constants.endpoints import EndpointConstants
 
 
 def test_the_table_covers_every_published_operation() -> None:
-    assert len(ENDPOINTS) == 67, f"tabloda {len(ENDPOINTS)} uc var"
-    assert len(BY_NAME) == len(ENDPOINTS), "ayni ada iki uc dusmus"
+    endpoints = EndpointConstants.ALL
+    assert len(endpoints) == 67, f"tabloda {len(endpoints)} uc var"
+    assert len(EndpointConstants.BY_NAME) == len(endpoints), "ayni ada iki uc dusmus"
 
 
-@pytest.mark.parametrize("endpoint", ENDPOINTS, ids=lambda e: e.name)
+@pytest.mark.parametrize("endpoint", EndpointConstants.ALL, ids=lambda e: e.name)
 def test_both_clients_expose_every_endpoint(endpoint) -> None:
     for client in (AstroMansion, AsyncAstroMansion):
         method = getattr(client, endpoint.name, None)
         assert callable(method), f"{client.__name__}.{endpoint.name} yok"
 
 
-@pytest.mark.parametrize("endpoint", ENDPOINTS, ids=lambda e: e.name)
+@pytest.mark.parametrize("endpoint", EndpointConstants.ALL, ids=lambda e: e.name)
 def test_every_method_documents_the_endpoint_it_wraps(endpoint) -> None:
     """A docstring must name the API path it reaches."""
     text = getattr(AstroMansion, endpoint.name).__doc__ or ""
@@ -35,7 +36,7 @@ def test_every_method_documents_the_endpoint_it_wraps(endpoint) -> None:
     assert endpoint.method in text
 
 
-@pytest.mark.parametrize("endpoint", ENDPOINTS, ids=lambda e: e.name)
+@pytest.mark.parametrize("endpoint", EndpointConstants.ALL, ids=lambda e: e.name)
 def test_every_endpoint_has_a_module_level_shortcut(endpoint) -> None:
     """The shortcut surface covers the whole API, not a chosen few.
 

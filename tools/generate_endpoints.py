@@ -1,395 +1,202 @@
-"""Generate the client method table from the published OpenAPI schema.
+"""tools/generate_endpoints.py: Generate the endpoint table and the client methods.
 
-Every endpoint the SDK exposes is derived here, never typed by hand. Writing
-the published operations out manually would guarantee that one is missed and
-that the list drifts the first time the API changes.
+Every endpoint the SDK exposes is derived here from the published OpenAPI
+schema, never typed by hand. Writing the operations out manually would
+guarantee that one is missed and that the list drifts the first time the API
+changes.
 
-Run after an API change::
+Three runs::
 
-    python tools/generate_endpoints.py
+    python tools/generate_endpoints.py               # after an API change
+    python tools/generate_endpoints.py schema.json   # from a saved schema
+    python tools/generate_endpoints.py --from-table  # after a template change
 
-It rewrites ``src/astromansion/_endpoints.py``. Nothing else imports the
-schema, so the generated table is the single description of the surface.
+The first two rewrite the endpoint table from the schema, then the method
+mixins and the shortcuts from the same rows. ``--from-table`` skips the
+schema: it reads the table's own rows back and rewrites every file from them,
+so a change to a template or a docstring never changes the surface the SDK
+exposes::
+
+    schema ──► models/constants/endpoints.py ──► _methods.py, _methods_async.py,
+                          ▲                      _shortcuts.py
+               --from-table starts here
 """
 
 from __future__ import annotations
 
+import ast
 import json
-import pathlib
 import re
+import subprocess
 import sys
 import urllib.request
+from collections.abc import Mapping, Sequence
 from pathlib import Path
-
-SCHEMA_URL = "https://api.astromansion.com/openapi.json"
-TARGET = Path(__file__).resolve().parent.parent / "src/astromansion/_endpoints.py"
-
-#: Names that the path alone cannot produce well. Keyed by verb and path so
-#: one entry can never be applied to the wrong operation.
-RENAMES = {
-    ("get", "/v1/custom-body/list"): "custom_bodies",
-    ("post", "/v1/custom-body/save"): "save_custom_body",
-    ("post", "/v1/custom-body/{name}"): "chart_with_custom_body",
-    ("delete", "/v1/custom-body/{name}"): "delete_custom_body",
-    ("get", "/v1/jobs"): "list_jobs",
-    ("post", "/v1/jobs"): "submit_job",
-    ("get", "/v1/jobs/{job_id}"): "job",
-    ("post", "/v1/jobs/batch"): "submit_batch_job",
-    ("get", "/v1/geo/search"): "search_places",
-    ("post", "/v1/moon-phases/query"): "moon_phases_for",
-    ("get", "/v1/moon-phases"): "moon_phases",
-}
-
-#: Endpoints returning a document rather than JSON.
-#: Endpoints the client implements by hand. A generated twin would shadow or
-#: be shadowed by the real one depending on import order, and mypy would flag
-#: the pair as an incompatible override. ``render_sharecard`` is written out
-#: because its two charts stay positional while ``partner`` is optional, a
-#: shape the generator has no rule for.
-HAND_WRITTEN = {
-    "/v1/render/sharecard",
-    "/v1/render/astrocartography",
-}
-
-BINARY = {
-    "/v1/export/pdf",
-    "/v1/export/csv",
-    "/v1/render/png",
-    "/v1/render/svg",
-    "/v1/render/biwheel",
-    "/v1/render/sharecard",
-    "/v1/render/astrocartography",
-}
+from types import MappingProxyType
+from typing import Any, Final
 
 
-def python_name(path: str, verb: str, shared: bool = False) -> str:
-    """Turn a path and verb into a method name.
+class GeneratorConstants:
+    """Where the generator reads and writes, and the endpoints it treats apart.
 
-    The explicit table wins. Otherwise the path segments become the name, and
-    a placeholder or a shared path adds only what is needed to keep the name
-    unique: applying every rule at once produced ``delete_delete_custom_body``.
+    ``RENAMES`` holds the names a path alone cannot produce well, keyed by verb
+    and path so one entry can never be applied to the wrong operation.
+    ``HAND_WRITTEN`` lists the endpoints a client writes out itself. They keep
+    their row and their shortcut but get no generated method, which the
+    hand-written one would otherwise have to override: ``render_sharecard``
+    keeps its two charts positional while ``partner`` is optional, a shape the
+    generator has no rule for. ``BINARY`` lists the endpoints that answer with
+    a document rather than JSON. ``MIXINS`` names each mixin's file, its class,
+    the client it is mixed into, and whether that client awaits.
+    ``SUMMARY_MAX_CHARS`` keeps a generated docstring's first line within the
+    line length the project lints for.
     """
-    override = RENAMES.get((verb, path))
-    if override:
-        return override
-    segments = path.split("/")[2:]
-    parts = [p for p in segments if not p.startswith("{")]
-    holders = [p.strip("{}") for p in segments if p.startswith("{")]
-    name = "_".join(parts).replace("-", "_")
-    if verb == "delete":
-        return f"delete_{name}"
-    if holders:
-        name = f"{name}_by_{holders[0]}"
-    elif shared:
-        name = f"{'list' if verb == 'get' else verb}_{name}"
-    return name
+
+    SCHEMA_URL: Final[str] = "https://api.astromansion.com/openapi.json"
+    SCHEMA_TIMEOUT_SECONDS: Final[float] = 30.0
+    USER_AGENT: Final[str] = "astromansion-sdk-generator"
+    FROM_TABLE_FLAG: Final[str] = "--from-table"
+
+    PACKAGE: Final[Path] = Path(__file__).resolve().parent.parent / "src/astromansion"
+    TABLE: Final[Path] = PACKAGE / "models/constants/endpoints.py"
+    SYNC_MIXIN: Final[Path] = PACKAGE / "_methods.py"
+    ASYNC_MIXIN: Final[Path] = PACKAGE / "_methods_async.py"
+    SHORTCUTS: Final[Path] = PACKAGE / "_shortcuts.py"
+    GENERATED: Final[tuple[Path, ...]] = (TABLE, SYNC_MIXIN, ASYNC_MIXIN, SHORTCUTS)
+    MIXINS: Final[tuple[tuple[Path, str, str, bool], ...]] = (
+        (SYNC_MIXIN, "SyncEndpoints", "synchronous", False),
+        (ASYNC_MIXIN, "AsyncEndpoints", "asynchronous", True),
+    )
+
+    RECORD: Final[str] = "Endpoint"
+    SUMMARY_MAX_CHARS: Final[int] = 58
+    SUMMARY_FALLBACK: Final[str] = "Call the endpoint"
+
+    RENAMES: Final[Mapping[tuple[str, str], str]] = MappingProxyType(
+        {
+            ("get", "/v1/custom-body/list"): "custom_bodies",
+            ("post", "/v1/custom-body/save"): "save_custom_body",
+            ("post", "/v1/custom-body/{name}"): "chart_with_custom_body",
+            ("delete", "/v1/custom-body/{name}"): "delete_custom_body",
+            ("get", "/v1/jobs"): "list_jobs",
+            ("post", "/v1/jobs"): "submit_job",
+            ("get", "/v1/jobs/{job_id}"): "job",
+            ("post", "/v1/jobs/batch"): "submit_batch_job",
+            ("get", "/v1/geo/search"): "search_places",
+            ("post", "/v1/moon-phases/query"): "moon_phases_for",
+            ("get", "/v1/moon-phases"): "moon_phases",
+        }
+    )
+    HAND_WRITTEN: Final[frozenset[str]] = frozenset({"/v1/render/sharecard"})
+    BINARY: Final[frozenset[str]] = frozenset(
+        {
+            "/v1/export/pdf",
+            "/v1/export/csv",
+            "/v1/render/png",
+            "/v1/render/svg",
+            "/v1/render/biwheel",
+            "/v1/render/sharecard",
+            "/v1/render/astrocartography",
+        }
+    )
 
 
-def classify(path: str, verb: str, op: dict, schemas: dict) -> tuple[str, list[str]]:
-    """Return the request shape and the top-level body fields."""
-    if verb in {"get", "delete"}:
-        return verb, [p["name"] for p in op.get("parameters", [])]
-    body = op.get("requestBody")
-    if not body:
-        return "empty", []
-    ref = body["content"]["application/json"]["schema"].get("$ref", "")
-    declared = schemas.get(ref.split("/")[-1], {})
-    fields = list(declared.get("properties", {}))
-    required = set(declared.get("required") or ())
-    # Only a schema that demands a partner gets the two-person signature.
-    # ``/v1/query`` merely allows one, and forcing it there would make the
-    # second chart mandatory for a call that does not need it.
-    if "partner" in required:
-        return "pair", fields
-    if fields[:1] == ["birth"] and set(fields) <= {"birth", "options"}:
-        return "chart", fields
-    if "birth" in fields:
-        return "birth_extra", fields
-    return "body", fields
+class TemplateConstants:
+    """The source text the generated modules are rendered from.
 
-
-def enveloped(op: dict, schemas: dict) -> bool | None:
-    """Return whether a success is wrapped in ``{technique, result}``.
-
-    Read from the published response schema, not guessed from a body: an
-    endpoint whose own data owned a ``result`` field would otherwise be
-    unwrapped and its real payload thrown away. ``None`` means the schema is
-    free-form and the shape has to be recognised at runtime.
+    Each template is filled with ``str.format``, so a brace the output needs
+    is written doubled. The ``*_ARGS`` fragments are passed in as values and
+    keep their braces single. ``HOOK_SHAPE_ARGS`` documents the three
+    arguments every transport hook shares, and the three hook fragments are
+    built from it so the shared lines are written once.
     """
-    try:
-        schema = op["responses"]["200"]["content"]["application/json"]["schema"]
-    except KeyError:
-        return None
-    ref = schema.get("$ref", "")
-    declared = schemas.get(ref.split("/")[-1], {}) if ref else schema
-    fields = set(declared.get("properties") or ())
-    if not fields:
-        return None
-    return {"technique", "result"} <= fields
 
-
-def summary(op: dict, limit: int = 58) -> str:
-    """One line describing the endpoint, taken from the schema.
-
-    Trimmed so the generated docstring fits the line length the project
-    lints for; the full text stays in the API reference.
-    """
-    text = (op.get("summary") or op.get("description") or "").strip()
-    line = text.splitlines()[0] if text else ""
-    line = re.sub(r"\s+", " ", line).strip().rstrip(".")
-    line = line or "Call the endpoint"
-    if len(line) > limit:
-        line = line[:limit].rsplit(" ", 1)[0] + "…"
-    return line
-
-
-def build() -> str:
-    source = sys.argv[1] if len(sys.argv) > 1 else SCHEMA_URL
-    if source.startswith("http"):
-        # The API rejects the default urllib agent, so identify the tool.
-        request = urllib.request.Request(
-            source,
-            headers={"User-Agent": "astromansion-sdk-generator"},
-        )
-        with urllib.request.urlopen(request) as stream:
-            schema = json.load(stream)
-    else:
-        schema = json.loads(pathlib.Path(source).read_text(encoding="utf-8"))
-    schemas = schema["components"]["schemas"]
-
-    rows: list[str] = []
-    seen: set[str] = set()
-    for path, operations in sorted(schema["paths"].items()):
-        shared = len(operations) > 1
-        for verb, op in operations.items():
-            name = python_name(path, verb, shared)
-            if name in seen:
-                raise SystemExit(f"duplicate method name {name!r} for {path}")
-            seen.add(name)
-            kind, fields = classify(path, verb, op, schemas)
-            rows.append(
-                f"    Endpoint(\n"
-                f"        name={name!r},\n"
-                f"        method={verb.upper()!r},\n"
-                f"        path={path!r},\n"
-                f"        kind={kind!r},\n"
-                f"        fields={tuple(fields)!r},\n"
-                f"        binary={path in BINARY!r},\n"
-                f"        enveloped={enveloped(op, schemas)!r},\n"
-                f"        summary={summary(op)!r},\n"
-                f"    ),"
-            )
-
-    body = "\n".join(rows)
-    return f'''"""Every endpoint the AstroMansion API publishes.
+    TABLE: Final[
+        str
+    ] = '''"""src/astromansion/models/constants/endpoints.py: Every endpoint the API publishes.
 
 Generated by ``tools/generate_endpoints.py`` from the live OpenAPI schema. Do
 not edit: rerun the generator after an API change so the SDK and the server
 cannot describe different surfaces.
 
-Endpoints: {len(rows)}
+Endpoints: {count}
 """
 
 from __future__ import annotations
 
-from typing import NamedTuple
+from collections.abc import Mapping
+from types import MappingProxyType
+from typing import Final
+
+from ..dataclasses.endpoints import Endpoint
 
 
-class Endpoint(NamedTuple):
-    """One operation the API publishes.
+class EndpointConstants:
+    """The operations the API publishes, in order and by method name.
 
-    :param name: Method name exposed on the clients.
-    :param method: HTTP verb.
-    :param path: Path template, possibly containing one placeholder.
-    :param kind: Request shape: ``chart``, ``pair``, ``birth_extra``,
-        ``body``, ``get``, ``delete`` or ``empty``.
-    :param fields: Top-level body fields the schema declares.
-    :param binary: Whether a success returns a document rather than JSON.
-    :param enveloped: Whether a success is wrapped in ``{{technique, result}}``.
-        ``None`` when the schema is free-form and the body decides.
-    :param summary: One-line description taken from the schema.
+    The generator renders both clients' methods and the module-level
+    shortcuts from ``ALL``, and the tests check the clients against it.
     """
 
-    name: str
-    method: str
-    path: str
-    kind: str
-    fields: tuple[str, ...]
-    binary: bool
-    enveloped: bool | None
-    summary: str
-
-
-ENDPOINTS: tuple[Endpoint, ...] = (
-{body}
-)
-
-BY_NAME: dict[str, Endpoint] = {{endpoint.name: endpoint for endpoint in ENDPOINTS}}
+    ALL: Final[tuple[Endpoint, ...]] = (
+{rows}
+    )
+    BY_NAME: Final[Mapping[str, Endpoint]] = MappingProxyType(
+        {{endpoint.name: endpoint for endpoint in ALL}}
+    )
 '''
 
+    TABLE_ROW: Final[str] = """        Endpoint(
+            name={name!r},
+            method={method!r},
+            path={path!r},
+            kind={kind!r},
+            fields={fields!r},
+            binary={binary!r},
+            enveloped={enveloped!r},
+            summary={summary!r},
+        ),"""
 
-CHART_SIGNATURE = """    {aw}def {name}(
-        self, payload: dict[str, Any] | None = None, *,
-        date: str | None = None, lat: float | None = None,
-        lon: float | None = None, time: str | None = None,
-        timezone: float | str | None = None, houses: str | None = None,
-        options: dict[str, Any] | None = None,{outarg}
-    ) -> {ret}:
-        \"\"\"{summary}.
+    HOOK_SHAPE_ARGS: Final[str] = (
+        "                binary: Whether a success is a document rather than JSON.\n"
+        "                technique: Endpoint name the result reports when the body\n"
+        "                    names none.\n"
+        "                enveloped: Whether a success is wrapped in\n"
+        "                    ``{technique, result}``; ``None`` lets the body decide.\n"
+    )
+    REQUEST_ARGS: Final[str] = (
+        "            Args:\n"
+        "                method: HTTP verb.\n"
+        "                path: A path beginning with ``/v1/``.\n"
+        + HOOK_SHAPE_ARGS
+        + "                **kwargs: Passed to httpx, notably ``json`` and ``params``.\n"
+    )
+    CHART_ARGS: Final[str] = (
+        "            Args:\n"
+        "                path: The endpoint's path.\n"
+        "                payload: Birth fields as one mapping, if the caller passed one.\n"
+        "                options: The endpoint's options.\n"
+        + HOOK_SHAPE_ARGS
+        + "                **fields: Birth fields passed as keywords.\n"
+    )
+    PAIR_ARGS: Final[str] = (
+        "            Args:\n"
+        "                path: The endpoint's path.\n"
+        "                birth: The first person's birth fields.\n"
+        "                partner: The second person's birth fields.\n"
+        "                options: The endpoint's options.\n"
+        + HOOK_SHAPE_ARGS
+        + "                **extra: Further top-level body fields.\n"
+    )
 
-        Wraps ``{method} {path}``.
-        \"\"\"
-        return {outopen}{aa}self._chart(
-            {path!r}, payload, options, date=date, lat=lat, lon=lon,
-            time=time, timezone=timezone, houses=houses, binary={binary!r},
-            technique={name!r}, enveloped={enveloped!r},
-        ){outclose}
-"""
-
-PAIR_SIGNATURE = """    {aw}def {name}(
-        self, birth: dict[str, Any], partner: dict[str, Any], *,
-        options: dict[str, Any] | None = None,{outarg} **extra: Any,
-    ) -> {ret}:
-        \"\"\"{summary}. Wraps ``{method} {path}``.
-
-        Both people are mappings of the fields ``natal`` accepts.
-        \"\"\"
-        return {outopen}{aa}self._pair(
-            {path!r}, birth, partner, options, binary={binary!r},
-            technique={name!r}, enveloped={enveloped!r}, **extra,
-        ){outclose}
-"""
-
-BODY_SIGNATURE = """    {aw}def {name}(self{argspec}, body: dict[str, Any] | None = None,{outarg} **fields: Any) -> {ret}:
-        \"\"\"{summary}. Wraps ``{method} {path}``.
-
-        Body fields: {fieldlist}.
-        \"\"\"
-        return {outopen}{aa}self.request(
-            {method!r}, {pathexpr}, json=_core.Arguments.merge(body, fields),
-            binary={binary!r}, technique={name!r}, enveloped={enveloped!r},
-        ){outclose}
-"""
-
-GET_SIGNATURE = """    {aw}def {name}(self{argspec}, **params: Any) -> {ret}:
-        \"\"\"{summary}.
-
-        Wraps ``{method} {path}``.
-        \"\"\"
-        return {aa}self.request(
-            {method!r}, {pathexpr}, params={{k: v for k, v in params.items() if v is not None}},
-            binary={binary!r}, technique={name!r}, enveloped={enveloped!r},
-        )
-"""
-
-
-def path_arguments(path: str) -> dict[str, str]:
-    """Turn a path template's placeholders into method arguments.
-
-    Every ``{placeholder}`` the schema declares becomes a required argument
-    and is quoted into the URL, so a name carrying a slash or a space cannot
-    reshape the path it is written into.
-
-    :param path: Path template from the schema.
-    :returns: The ``argspec`` and ``pathexpr`` the signature templates want.
-    """
-    holders = [part.strip("{}") for part in path.split("/") if part.startswith("{")]
-    if not holders:
-        return {"argspec": "", "pathexpr": repr(path)}
-    quoted = path
-    for holder in holders:
-        quoted = quoted.replace(
-            "{" + holder + "}",
-            "{quote(str(" + holder + "), safe='')}",
-        )
-    return {
-        "argspec": "".join(f", {holder}: str" for holder in holders),
-        "pathexpr": "f" + repr(quoted),
-    }
-
-
-def emit_methods(endpoints, is_async: bool) -> str:
-    """Render every endpoint as a method on one client."""
-    aw = "async def " if is_async else "def "
-    aw = aw[:-4] if False else ("async " if is_async else "")
-    aa = "await " if is_async else ""
-    out = []
-    for e in endpoints:
-        ret = "bytes | Path" if e.binary else "Result"
-        common = dict(
-            aw=aw,
-            aa=aa,
-            name=e.name,
-            ret=ret,
-            summary=e.summary,
-            method=e.method,
-            path=e.path,
-            binary=e.binary,
-            enveloped=e.enveloped,
-        )
-        # A binary endpoint answers with a document, so it accepts a path to
-        # write it to. Every one of them, rather than whichever was asked for
-        # first: a caller should not have to remember which can save itself.
-        common["outarg"] = " output: str | Path | None = None," if e.binary else ""
-        common["outopen"] = "self._document(" if e.binary else ""
-        common["outclose"] = ", output)" if e.binary else ""
-        if e.kind == "chart":
-            out.append(CHART_SIGNATURE.format(**common))
-        elif e.kind == "pair":
-            out.append(PAIR_SIGNATURE.format(**common))
-        elif e.kind in {"body", "birth_extra"}:
-            out.append(
-                BODY_SIGNATURE.format(
-                    fieldlist=", ".join(f"``{f}``" for f in e.fields)
-                    or "see the API docs",
-                    **path_arguments(e.path),
-                    **common,
-                )
-            )
-        else:
-            out.append(GET_SIGNATURE.format(**path_arguments(e.path), **common))
-    return "\n".join(out)
-
-
-def format_generated() -> None:
-    """Run the formatter over the files just written.
-
-    Without this the generated modules drift out of the project's format the
-    moment anyone runs ``ruff format``, and the next regeneration undoes it.
-    """
-    import subprocess
-
-    paths = [
-        str(TARGET.parent / name)
-        for name in (
-            "_methods.py",
-            "_methods_async.py",
-            "_shortcuts.py",
-            "_endpoints.py",
-        )
-    ]
-    for argv in (
-        [sys.executable, "-m", "ruff", "check", "--fix", "--quiet", *paths],
-        [sys.executable, "-m", "ruff", "format", "--quiet", *paths],
-    ):
-        result = subprocess.run(
-            argv,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if result.returncode:
-            print(result.stderr, file=sys.stderr)
-
-
-def write_mixins(endpoints) -> None:
-    """Write the generated method mixins for both clients."""
-    header = '''"""Generated client methods, one per published endpoint.
+    MIXIN_HEADER: Final[
+        str
+    ] = '''"""src/astromansion/{module}: Generated client methods, one per endpoint.
 
 Produced by ``tools/generate_endpoints.py``. Do not edit: rerun the generator
 so the SDK cannot describe a surface the API does not serve.
 
-Endpoints: {count}
+Endpoints: {count}. Written on the client itself: {hand_written}.
 """
 
 from __future__ import annotations
@@ -398,160 +205,261 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, overload
 from urllib.parse import quote
 
-from . import _core
+from ._bodies import RequestBodies
+from ._responses import Responses
 from .response import Result
 
 
 class {cls}:
     """Every endpoint, mixed into the {word} client.
 
-    The transport lives on the client this is mixed into. Declaring the three
-    hooks here is what lets a type checker see the mixin as complete instead
-    of reporting every method as calling something that does not exist.
+    The transport lives on the client this is mixed into. Declaring its hooks
+    here is what lets a type checker see the mixin as complete instead of
+    reporting every method as calling something that does not exist. Each
+    hook is declared for a JSON answer, for a document, and for either; the
+    last is the form the client implements.
     """
 
     if TYPE_CHECKING:
+
         @overload
         {aw}def request(
             self, method: str, path: str, *, binary: Literal[False] = ...,
             technique: str | None = ..., enveloped: bool | None = ..., **kwargs: Any,
-        ) -> Result: ...
+        ) -> Result:
+            """Send a request whose success is JSON.
+
+{request_args}
+            Returns:
+                The decoded response.
+            """
 
         @overload
         {aw}def request(
             self, method: str, path: str, *, binary: Literal[True],
             technique: str | None = ..., enveloped: bool | None = ..., **kwargs: Any,
-        ) -> bytes: ...
+        ) -> bytes:
+            """Send a request whose success is a document.
+
+{request_args}
+            Returns:
+                The document's bytes.
+            """
 
         {aw}def request(
             self, method: str, path: str, *, binary: bool = ...,
             technique: str | None = ..., enveloped: bool | None = ..., **kwargs: Any,
-        ) -> Result | bytes: ...
+        ) -> Result | bytes:
+            """Send a request whose success is JSON or a document.
+
+{request_args}
+            Returns:
+                The decoded response, or the document's bytes.
+            """
 
         @overload
         {aw}def _chart(
             self, path: str, payload: dict[str, Any] | None,
             options: dict[str, Any] | None, *, binary: Literal[False] = ...,
             technique: str | None = ..., enveloped: bool | None = ..., **fields: Any,
-        ) -> Result: ...
+        ) -> Result:
+            """Send a one-person request whose success is JSON.
+
+{chart_args}
+            Returns:
+                The decoded response.
+            """
 
         @overload
         {aw}def _chart(
             self, path: str, payload: dict[str, Any] | None,
             options: dict[str, Any] | None, *, binary: Literal[True],
             technique: str | None = ..., enveloped: bool | None = ..., **fields: Any,
-        ) -> bytes: ...
+        ) -> bytes:
+            """Send a one-person request whose success is a document.
+
+{chart_args}
+            Returns:
+                The document's bytes.
+            """
 
         {aw}def _chart(
             self, path: str, payload: dict[str, Any] | None,
             options: dict[str, Any] | None, *, binary: bool = ...,
             technique: str | None = ..., enveloped: bool | None = ..., **fields: Any,
-        ) -> Result | bytes: ...
+        ) -> Result | bytes:
+            """Send a one-person request whose success is JSON or a document.
+
+{chart_args}
+            Returns:
+                The decoded response, or the document's bytes.
+            """
 
         @overload
         {aw}def _pair(
             self, path: str, birth: dict[str, Any], partner: dict[str, Any],
             options: dict[str, Any] | None, *, binary: Literal[False] = ...,
             technique: str | None = ..., enveloped: bool | None = ..., **extra: Any,
-        ) -> Result: ...
+        ) -> Result:
+            """Send a two-person request whose success is JSON.
+
+{pair_args}
+            Returns:
+                The decoded response.
+            """
 
         @overload
         {aw}def _pair(
             self, path: str, birth: dict[str, Any], partner: dict[str, Any],
             options: dict[str, Any] | None, *, binary: Literal[True],
             technique: str | None = ..., enveloped: bool | None = ..., **extra: Any,
-        ) -> bytes: ...
+        ) -> bytes:
+            """Send a two-person request whose success is a document.
+
+{pair_args}
+            Returns:
+                The document's bytes.
+            """
 
         {aw}def _pair(
             self, path: str, birth: dict[str, Any], partner: dict[str, Any],
             options: dict[str, Any] | None, *, binary: bool = ...,
             technique: str | None = ..., enveloped: bool | None = ..., **extra: Any,
-        ) -> Result | bytes: ...
+        ) -> Result | bytes:
+            """Send a two-person request whose success is JSON or a document.
 
-        @staticmethod
-        def _document(content: bytes, output: str | Path | None) -> bytes | Path: ...
+{pair_args}
+            Returns:
+                The decoded response, or the document's bytes.
+            """
 
 '''
-    root = TARGET.parent
-    (root / "_methods.py").write_text(
-        header.format(
-            count=len(endpoints), cls="SyncEndpoints", word="synchronous", aw=""
+
+    CHART_METHOD: Final[str] = """    {aw}def {name}(
+        self, payload: dict[str, Any] | None = None, *,
+        date: str | None = None, lat: float | None = None,
+        lon: float | None = None, time: str | None = None,
+        timezone: float | str | None = None, houses: str | None = None,
+        options: dict[str, Any] | None = None,{outarg}
+    ) -> {ret}:
+        \"\"\"{summary}. Wraps ``{method} {path}``.
+
+        Birth fields come as one mapping or as keywords, never both.
+
+        Args:
+            payload: Birth fields as one mapping, instead of the keywords.
+            date: Calendar date as ``YYYY-MM-DD``.
+            lat: Latitude in decimal degrees, north positive.
+            lon: Longitude in decimal degrees, east positive.
+            time: Clock time as ``HH:MM``; omit it for an unknown birth time.
+            timezone: UTC offset in hours, or an IANA zone name.
+            houses: A house system identifier the API publishes.
+            options: The endpoint's options.{outdoc}
+
+        Returns:
+            {retdoc}
+
+        Raises:
+            ValidationError: A birth field is malformed, or the API refused the body.
+            AstroMansionError: The API refused the call, or never answered.
+        \"\"\"
+        return {outopen}{aa}self._chart(
+            {path!r}, payload, options, date=date, lat=lat, lon=lon,
+            time=time, timezone=timezone, houses=houses, binary={binary!r},
+            technique={name!r}, enveloped={enveloped!r},
+        ){outclose}
+"""
+
+    PAIR_METHOD: Final[str] = """    {aw}def {name}(
+        self, birth: dict[str, Any], partner: dict[str, Any], *,
+        options: dict[str, Any] | None = None,{outarg} **extra: Any,
+    ) -> {ret}:
+        \"\"\"{summary}. Wraps ``{method} {path}``.
+
+        Args:
+            birth: The first person's birth fields, as ``natal`` takes them.
+            partner: The second person's birth fields.
+            options: The endpoint's options.{outdoc}
+            **extra: Further top-level body fields.
+
+        Returns:
+            {retdoc}
+
+        Raises:
+            ValidationError: A birth field of either person is malformed, or
+                the API refused the body.
+            AstroMansionError: The API refused the call, or never answered.
+        \"\"\"
+        return {outopen}{aa}self._pair(
+            {path!r}, birth, partner, options, binary={binary!r},
+            technique={name!r}, enveloped={enveloped!r}, **extra,
+        ){outclose}
+"""
+
+    BODY_METHOD: Final[
+        str
+    ] = """    {aw}def {name}(self{argspec}, body: dict[str, Any] | None = None,{outarg} **fields: Any) -> {ret}:
+        \"\"\"{summary}. Wraps ``{method} {path}``.
+
+        Args:{argdoc}
+            body: The request body as one mapping, instead of keyword fields.{outdoc}
+            **fields: Body fields as keywords: {fieldlist}.
+
+        Returns:
+            {retdoc}
+
+        Raises:
+            TypeError: Both a body mapping and keyword fields were given.
+            AstroMansionError: The API refused the call, or never answered.
+        \"\"\"
+        return {outopen}{aa}self.request(
+            {method!r}, {pathexpr}, json=RequestBodies.merge(body, fields),
+            binary={binary!r}, technique={name!r}, enveloped={enveloped!r},
+        ){outclose}
+"""
+
+    GET_METHOD: Final[
+        str
+    ] = """    {aw}def {name}(self{argspec}, **params: Any) -> {ret}:
+        \"\"\"{summary}. Wraps ``{method} {path}``.
+
+        Args:{argdoc}
+            **params: Query parameters; those set to ``None`` are left out.
+
+        Returns:
+            {retdoc}
+
+        Raises:
+            AstroMansionError: The API refused the call, or never answered.
+        \"\"\"
+        return {aa}self.request(
+            {method!r}, {pathexpr}, params={{k: v for k, v in params.items() if v is not None}},
+            binary={binary!r}, technique={name!r}, enveloped={enveloped!r},
         )
-        + emit_methods(endpoints, False),
-        encoding="utf-8",
+"""
+
+    OUTPUT_DOC: Final[str] = (
+        "\n            output: Path to write the document to, or ``None`` for the bytes."
     )
-    (root / "_methods_async.py").write_text(
-        header.format(
-            count=len(endpoints), cls="AsyncEndpoints", word="asynchronous", aw="async "
-        )
-        + emit_methods(endpoints, True),
-        encoding="utf-8",
+    RETURNS_DOCUMENT: Final[str] = (
+        "The document's bytes, or the path it was written to."
     )
+    RETURNS_RESULT: Final[str] = "The decoded response."
+    NO_FIELDS: Final[str] = "see the API docs"
 
-
-SHORTCUT_CHART = '''def {name}(
-    payload: dict[str, Any] | None = None, **fields: Any
-) -> {ret}:
-    """{summary}.
-
-    Forwards to :meth:`AstroMansion.{name}` on the shared client.
-    """
-    return default_client().{name}(payload, **fields)
-'''
-
-SHORTCUT_PAIR = '''def {name}(
-    birth: dict[str, Any], partner: dict[str, Any], **kwargs: Any
-) -> {ret}:
-    """{summary}.
-
-    Forwards to :meth:`AstroMansion.{name}` on the shared client.
-    """
-    return default_client().{name}(birth, partner, **kwargs)
-'''
-
-SHORTCUT_PLAIN = '''def {name}(*args: Any, **kwargs: Any) -> {ret}:
-    """{summary}.
-
-    Forwards to :meth:`AstroMansion.{name}` on the shared client.
-    """
-    return default_client().{name}(*args, **kwargs)
-'''
-
-
-def write_shortcuts(endpoints) -> None:
-    """Write a module-level shortcut for every endpoint.
-
-    Generated from the same table as the methods. A convenience surface that
-    covered only some endpoints would read as the whole package while hiding
-    most of it, so it covers all of them or it would not be offered.
-    """
-    blocks = []
-    for endpoint in endpoints:
-        common = {
-            "name": endpoint.name,
-            "ret": "bytes | Path" if endpoint.binary else "Result",
-            "summary": endpoint.summary,
-        }
-        if endpoint.kind == "chart":
-            blocks.append(SHORTCUT_CHART.format(**common))
-        elif endpoint.kind == "pair":
-            blocks.append(SHORTCUT_PAIR.format(**common))
-        else:
-            blocks.append(SHORTCUT_PLAIN.format(**common))
-
-    listing = "\n".join(f'    "{name}",' for name in sorted(e.name for e in endpoints))
-    header = f'''"""Module-level shortcut for every endpoint.
+    SHORTCUTS_HEADER: Final[
+        str
+    ] = '''"""src/astromansion/_shortcuts.py: Module-level shortcut for every endpoint.
 
 Generated by ``tools/generate_endpoints.py``. Do not edit.
 
-Endpoints: {len(endpoints)}
+Endpoints: {count}
 """
 
 from __future__ import annotations
 
-from typing import Any
-
 from pathlib import Path
+from typing import Any
 
 from .response import Result
 from .shortcuts import default_client
@@ -562,20 +470,566 @@ __all__ = [
 
 
 '''
-    (TARGET.parent / "_shortcuts.py").write_text(
-        header + "\n".join(blocks),
-        encoding="utf-8",
-    )
+
+    CHART_SHORTCUT: Final[str] = '''def {name}(
+    payload: dict[str, Any] | None = None, **fields: Any
+) -> {ret}:
+    """{summary}.
+
+    Forwards to :meth:`AstroMansion.{name}` on the shared client.
+
+    Args:
+        payload: Birth fields as one mapping, instead of keywords.
+        **fields: Birth fields and the method's other arguments, as keywords.
+
+    Returns:
+        What :meth:`AstroMansion.{name}` returns.
+    """
+    return default_client().{name}(payload, **fields)
+'''
+
+    PAIR_SHORTCUT: Final[str] = '''def {name}(
+    birth: dict[str, Any], partner: dict[str, Any], **kwargs: Any
+) -> {ret}:
+    """{summary}.
+
+    Forwards to :meth:`AstroMansion.{name}` on the shared client.
+
+    Args:
+        birth: The first person's birth fields.
+        partner: The second person's birth fields.
+        **kwargs: The method's other arguments.
+
+    Returns:
+        What :meth:`AstroMansion.{name}` returns.
+    """
+    return default_client().{name}(birth, partner, **kwargs)
+'''
+
+    PLAIN_SHORTCUT: Final[str] = '''def {name}(*args: Any, **kwargs: Any) -> {ret}:
+    """{summary}.
+
+    Forwards to :meth:`AstroMansion.{name}` on the shared client.
+
+    Args:
+        *args: The method's positional arguments.
+        **kwargs: The method's keyword arguments.
+
+    Returns:
+        What :meth:`AstroMansion.{name}` returns.
+    """
+    return default_client().{name}(*args, **kwargs)
+'''
+
+
+class EndpointSchema:
+    """Read the published OpenAPI schema into the rows of the endpoint table."""
+
+    @staticmethod
+    def method_name(path: str, verb: str, shared: bool = False) -> str:
+        """Turn a path and a verb into a method name.
+
+        The rename table wins. Otherwise the path segments become the name,
+        and a placeholder or a shared path adds only what is needed to keep
+        the name unique: applying every rule at once produced
+        ``delete_delete_custom_body``.
+
+        Args:
+            path: The path template from the schema.
+            verb: The lower-case HTTP verb.
+            shared: Whether another verb is published on the same path.
+
+        Returns:
+            The method name.
+
+        Examples:
+            >>> EndpointSchema.method_name("/v1/natal", "post")
+            'natal'
+            >>> EndpointSchema.method_name("/v1/jobs/{job_id}", "get")
+            'job'
+            >>> EndpointSchema.method_name("/v1/people/{person_id}", "get")
+            'people_by_person_id'
+            >>> EndpointSchema.method_name("/v1/people/{person_id}", "delete")
+            'delete_people'
+            >>> EndpointSchema.method_name("/v1/people", "get", shared=True)
+            'list_people'
+        """
+        override = GeneratorConstants.RENAMES.get((verb, path))
+        if override:
+            return override
+        segments = path.split("/")[2:]
+        parts = [part for part in segments if not part.startswith("{")]
+        holders = [part.strip("{}") for part in segments if part.startswith("{")]
+        name = "_".join(parts).replace("-", "_")
+        if verb == "delete":
+            return f"delete_{name}"
+        if holders:
+            name = f"{name}_by_{holders[0]}"
+        elif shared:
+            name = f"{'list' if verb == 'get' else verb}_{name}"
+        return name
+
+    @staticmethod
+    def classify(
+        verb: str, operation: Mapping[str, Any], schemas: Mapping[str, Any]
+    ) -> tuple[str, list[str]]:
+        """Return the request shape and the top-level body fields.
+
+        Only a schema that demands a partner gets the two-person signature.
+        ``/v1/query`` merely allows one, and forcing it there would make the
+        second chart mandatory for a call that does not need it.
+
+        Args:
+            verb: The lower-case HTTP verb.
+            operation: The operation object from the schema.
+            schemas: The schema's component schemas.
+
+        Returns:
+            The shape (``chart``, ``pair``, ``birth_extra``, ``body``, ``get``,
+            ``delete`` or ``empty``) and the body's top-level fields.
+        """
+        if verb in {"get", "delete"}:
+            return verb, [p["name"] for p in operation.get("parameters", [])]
+        body = operation.get("requestBody")
+        if not body:
+            return "empty", []
+        ref = body["content"]["application/json"]["schema"].get("$ref", "")
+        declared = schemas.get(ref.split("/")[-1], {})
+        fields = list(declared.get("properties", {}))
+        required = set(declared.get("required") or ())
+        if "partner" in required:
+            return "pair", fields
+        if fields[:1] == ["birth"] and set(fields) <= {"birth", "options"}:
+            return "chart", fields
+        if "birth" in fields:
+            return "birth_extra", fields
+        return "body", fields
+
+    @staticmethod
+    def enveloped(
+        operation: Mapping[str, Any], schemas: Mapping[str, Any]
+    ) -> bool | None:
+        """Return whether a success is wrapped in ``{technique, result}``.
+
+        Read from the published response schema, not guessed from a body: an
+        endpoint whose own data owned a ``result`` field would otherwise be
+        unwrapped and its real payload thrown away.
+
+        Args:
+            operation: The operation object from the schema.
+            schemas: The schema's component schemas.
+
+        Returns:
+            True or False from the schema, or ``None`` when the schema is
+            free-form and the shape has to be recognised at runtime.
+        """
+        try:
+            schema = operation["responses"]["200"]["content"]["application/json"][
+                "schema"
+            ]
+        except KeyError:
+            return None
+        ref = schema.get("$ref", "")
+        declared = schemas.get(ref.split("/")[-1], {}) if ref else schema
+        fields = set(declared.get("properties") or ())
+        if not fields:
+            return None
+        return {"technique", "result"} <= fields
+
+    @staticmethod
+    def summary(operation: Mapping[str, Any]) -> str:
+        """Return one line describing the endpoint, taken from the schema.
+
+        Trimmed so the generated docstring fits the line length the project
+        lints for; the full text stays in the API reference.
+
+        Args:
+            operation: The operation object from the schema.
+
+        Returns:
+            The summary, without a trailing period.
+
+        Examples:
+            >>> EndpointSchema.summary({"summary": "Compute a natal chart."})
+            'Compute a natal chart'
+            >>> EndpointSchema.summary({})
+            'Call the endpoint'
+        """
+        text = (operation.get("summary") or operation.get("description") or "").strip()
+        line = text.splitlines()[0] if text else ""
+        line = re.sub(r"\s+", " ", line).strip().rstrip(".")
+        line = line or GeneratorConstants.SUMMARY_FALLBACK
+        if len(line) > GeneratorConstants.SUMMARY_MAX_CHARS:
+            line = line[: GeneratorConstants.SUMMARY_MAX_CHARS].rsplit(" ", 1)[0] + "…"
+        return line
+
+    @classmethod
+    def rows(cls, source: str) -> list[dict[str, Any]]:
+        """Read every published operation into one row of the endpoint table.
+
+        Args:
+            source: The schema's URL, or the path of a saved schema.
+
+        Returns:
+            One row per operation, sorted by path.
+
+        Raises:
+            SystemExit: Two operations would get the same method name.
+        """
+        if source.startswith("http"):
+            # The API rejects the default urllib agent, so identify the tool.
+            request = urllib.request.Request(
+                source, headers={"User-Agent": GeneratorConstants.USER_AGENT}
+            )
+            with urllib.request.urlopen(
+                request, timeout=GeneratorConstants.SCHEMA_TIMEOUT_SECONDS
+            ) as stream:
+                schema = json.load(stream)
+        else:
+            schema = json.loads(Path(source).read_text(encoding="utf-8"))
+        schemas = schema["components"]["schemas"]
+
+        rows: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for path, operations in sorted(schema["paths"].items()):
+            shared = len(operations) > 1
+            for verb, operation in operations.items():
+                name = cls.method_name(path, verb, shared)
+                if name in seen:
+                    raise SystemExit(f"duplicate method name {name!r} for {path}")
+                seen.add(name)
+                kind, fields = cls.classify(verb, operation, schemas)
+                rows.append(
+                    {
+                        "name": name,
+                        "method": verb.upper(),
+                        "path": path,
+                        "kind": kind,
+                        "fields": tuple(fields),
+                        "binary": path in GeneratorConstants.BINARY,
+                        "enveloped": cls.enveloped(operation, schemas),
+                        "summary": cls.summary(operation),
+                    }
+                )
+        return rows
+
+
+class GeneratedSources:
+    """Render the generated modules from the table's rows, and write them."""
+
+    @staticmethod
+    def read_rows(source: str) -> list[dict[str, Any]]:
+        """Read the rows back out of an endpoint table's source.
+
+        The table is parsed, never imported: importing it would import the
+        whole package, including the mixins this run is about to replace.
+
+        Args:
+            source: The text of the table module.
+
+        Returns:
+            One row per endpoint, in the table's order.
+        """
+        return [
+            {
+                keyword.arg: ast.literal_eval(keyword.value)
+                for keyword in node.keywords
+                if keyword.arg is not None
+            }
+            for node in ast.walk(ast.parse(source))
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == GeneratorConstants.RECORD
+        ]
+
+    @staticmethod
+    def render_table(rows: Sequence[Mapping[str, Any]]) -> str:
+        """Render the endpoint table module.
+
+        Args:
+            rows: One mapping per endpoint, with the fields of ``Endpoint``.
+
+        Returns:
+            The source of ``models/constants/endpoints.py``.
+
+        Examples:
+            >>> row = {"name": "natal", "method": "POST", "path": "/v1/natal",
+            ...        "kind": "chart", "fields": ("birth", "options"),
+            ...        "binary": False, "enveloped": True, "summary": "Natal chart"}
+            >>> source = GeneratedSources.render_table([row])
+            >>> GeneratedSources.read_rows(source) == [row]
+            True
+        """
+        entries = [
+            TemplateConstants.TABLE_ROW.format(
+                **{**row, "fields": tuple(row["fields"])}
+            )
+            for row in rows
+        ]
+        return TemplateConstants.TABLE.format(
+            count=len(entries), rows="\n".join(entries)
+        )
+
+    @staticmethod
+    def path_arguments(path: str) -> dict[str, str]:
+        """Turn a path template's placeholders into method arguments.
+
+        Every ``{placeholder}`` the schema declares becomes a required argument
+        and is quoted into the URL, so a name carrying a slash or a space cannot
+        reshape the path it is written into.
+
+        Args:
+            path: Path template from the schema.
+
+        Returns:
+            The ``argspec``, ``pathexpr``, and ``argdoc`` the templates want.
+
+        Examples:
+            >>> print(GeneratedSources.path_arguments("/v1/natal")["pathexpr"])
+            '/v1/natal'
+            >>> arguments = GeneratedSources.path_arguments("/v1/custom-body/{name}")
+            >>> print(arguments["argspec"])
+            , name: str
+            >>> print(arguments["pathexpr"])
+            f"/v1/custom-body/{quote(str(name), safe='')}"
+        """
+        holders = [part.strip("{}") for part in path.split("/") if part.startswith("{")]
+        if not holders:
+            return {"argspec": "", "pathexpr": repr(path), "argdoc": ""}
+        quoted = path
+        for holder in holders:
+            quoted = quoted.replace(
+                "{" + holder + "}", "{quote(str(" + holder + "), safe='')}"
+            )
+        return {
+            "argspec": "".join(f", {holder}: str" for holder in holders),
+            "pathexpr": "f" + repr(quoted),
+            "argdoc": "".join(
+                f"\n            {holder}: The ``{{{holder}}}`` path segment, "
+                "quoted into the URL."
+                for holder in holders
+            ),
+        }
+
+    @classmethod
+    def render_methods(cls, rows: Sequence[Mapping[str, Any]], is_async: bool) -> str:
+        """Render every generated endpoint as a method on one client.
+
+        A binary endpoint answers with a document, so every one of them accepts
+        a path to write it to: a caller should not have to remember which can
+        save itself. A hand-written endpoint gets no method here.
+
+        Args:
+            rows: The endpoint table's rows.
+            is_async: Whether to render the awaited client's methods.
+
+        Returns:
+            The methods' source, one after another.
+
+        Examples:
+            >>> row = {"name": "natal", "method": "POST", "path": "/v1/natal",
+            ...        "kind": "chart", "fields": ("birth", "options"),
+            ...        "binary": False, "enveloped": True, "summary": "Natal chart"}
+            >>> "async def natal(" in GeneratedSources.render_methods([row], True)
+            True
+        """
+        aw = "async " if is_async else ""
+        aa = "await " if is_async else ""
+        out = []
+        for row in rows:
+            if row["path"] in GeneratorConstants.HAND_WRITTEN:
+                continue
+            binary = row["binary"]
+            common = {
+                "aw": aw,
+                "aa": aa,
+                "name": row["name"],
+                "ret": "bytes | Path" if binary else "Result",
+                "retdoc": (
+                    TemplateConstants.RETURNS_DOCUMENT
+                    if binary
+                    else TemplateConstants.RETURNS_RESULT
+                ),
+                "summary": row["summary"],
+                "method": row["method"],
+                "path": row["path"],
+                "binary": binary,
+                "enveloped": row["enveloped"],
+                "outarg": " output: str | Path | None = None," if binary else "",
+                "outdoc": TemplateConstants.OUTPUT_DOC if binary else "",
+                "outopen": "Responses.save_document(" if binary else "",
+                "outclose": ", output)" if binary else "",
+            }
+            if row["kind"] == "chart":
+                out.append(TemplateConstants.CHART_METHOD.format(**common))
+            elif row["kind"] == "pair":
+                out.append(TemplateConstants.PAIR_METHOD.format(**common))
+            elif row["kind"] in {"body", "birth_extra"}:
+                out.append(
+                    TemplateConstants.BODY_METHOD.format(
+                        fieldlist=", ".join(f"``{field}``" for field in row["fields"])
+                        or TemplateConstants.NO_FIELDS,
+                        **cls.path_arguments(row["path"]),
+                        **common,
+                    )
+                )
+            else:
+                out.append(
+                    TemplateConstants.GET_METHOD.format(
+                        **cls.path_arguments(row["path"]), **common
+                    )
+                )
+        return "\n".join(out)
+
+    @classmethod
+    def render_mixin(
+        cls,
+        rows: Sequence[Mapping[str, Any]],
+        module: str,
+        class_name: str,
+        client_word: str,
+        is_async: bool,
+    ) -> str:
+        """Render one client's method mixin.
+
+        Args:
+            rows: The endpoint table's rows.
+            module: The mixin's file name.
+            class_name: The mixin's class name.
+            client_word: ``synchronous`` or ``asynchronous``, for its docstring.
+            is_async: Whether the client awaits.
+
+        Returns:
+            The mixin module's source.
+
+        Examples:
+            >>> row = {"name": "share", "method": "POST",
+            ...        "path": "/v1/render/sharecard", "kind": "body",
+            ...        "fields": ("birth",), "binary": True, "enveloped": None,
+            ...        "summary": "Share card"}
+            >>> source = GeneratedSources.render_mixin(
+            ...     [row], "_methods.py", "SyncEndpoints", "synchronous", False
+            ... )
+            >>> "Endpoints: 0. Written on the client itself: share." in source
+            True
+        """
+        hand_written = [
+            row["name"]
+            for row in rows
+            if row["path"] in GeneratorConstants.HAND_WRITTEN
+        ]
+        return TemplateConstants.MIXIN_HEADER.format(
+            module=module,
+            count=len(rows) - len(hand_written),
+            hand_written=", ".join(hand_written) or "none",
+            cls=class_name,
+            word=client_word,
+            aw="async " if is_async else "",
+            request_args=TemplateConstants.REQUEST_ARGS,
+            chart_args=TemplateConstants.CHART_ARGS,
+            pair_args=TemplateConstants.PAIR_ARGS,
+        ) + cls.render_methods(rows, is_async)
+
+    @staticmethod
+    def render_shortcuts(rows: Sequence[Mapping[str, Any]]) -> str:
+        """Render a module-level shortcut for every endpoint.
+
+        Rendered from the same rows as the methods, hand-written ones included.
+        A convenience surface that covered only some endpoints would read as
+        the whole package while hiding most of it, so it covers all of them or
+        it would not be offered.
+
+        Args:
+            rows: The endpoint table's rows.
+
+        Returns:
+            The source of ``_shortcuts.py``.
+
+        Examples:
+            >>> row = {"name": "natal", "method": "POST", "path": "/v1/natal",
+            ...        "kind": "chart", "fields": ("birth", "options"),
+            ...        "binary": False, "enveloped": True, "summary": "Natal chart"}
+            >>> "return default_client().natal(payload, **fields)" in (
+            ...     GeneratedSources.render_shortcuts([row])
+            ... )
+            True
+        """
+        blocks = []
+        for row in rows:
+            common = {
+                "name": row["name"],
+                "ret": "bytes | Path" if row["binary"] else "Result",
+                "summary": row["summary"],
+            }
+            if row["kind"] == "chart":
+                blocks.append(TemplateConstants.CHART_SHORTCUT.format(**common))
+            elif row["kind"] == "pair":
+                blocks.append(TemplateConstants.PAIR_SHORTCUT.format(**common))
+            else:
+                blocks.append(TemplateConstants.PLAIN_SHORTCUT.format(**common))
+        listing = "\n".join(
+            f'    "{name}",' for name in sorted(r["name"] for r in rows)
+        )
+        header = TemplateConstants.SHORTCUTS_HEADER.format(
+            count=len(rows), listing=listing
+        )
+        return header + "\n".join(blocks)
+
+    @staticmethod
+    def run_formatter() -> None:
+        """Run the project's linter fixes and formatter over the generated files.
+
+        Without this the generated modules drift out of the project's format
+        the moment anyone runs ``ruff format``, and the next regeneration
+        undoes it.
+        """
+        paths = [str(path) for path in GeneratorConstants.GENERATED]
+        for argv in (
+            [sys.executable, "-m", "ruff", "check", "--fix", "--quiet", *paths],
+            [sys.executable, "-m", "ruff", "format", "--quiet", *paths],
+        ):
+            result = subprocess.run(argv, capture_output=True, text=True, check=False)
+            if result.returncode:
+                print(result.stderr, file=sys.stderr)
+
+    @classmethod
+    def write(cls, rows: Sequence[Mapping[str, Any]]) -> None:
+        """Write the table, both mixins, and the shortcuts, then format them.
+
+        Args:
+            rows: The endpoint table's rows.
+        """
+        GeneratorConstants.TABLE.write_text(cls.render_table(rows), encoding="utf-8")
+        for path, class_name, client_word, is_async in GeneratorConstants.MIXINS:
+            path.write_text(
+                cls.render_mixin(rows, path.name, class_name, client_word, is_async),
+                encoding="utf-8",
+            )
+        GeneratorConstants.SHORTCUTS.write_text(
+            cls.render_shortcuts(rows), encoding="utf-8"
+        )
+        cls.run_formatter()
+
+
+def main(argv: Sequence[str]) -> None:
+    """Regenerate the table, the mixins, and the shortcuts.
+
+    Args:
+        argv: The command-line arguments after the program name: an optional
+            schema source, or ``--from-table``.
+    """
+    if GeneratorConstants.FROM_TABLE_FLAG in argv:
+        rows = GeneratedSources.read_rows(
+            GeneratorConstants.TABLE.read_text(encoding="utf-8")
+        )
+    else:
+        sources = [arg for arg in argv if not arg.startswith("--")]
+        rows = EndpointSchema.rows(
+            sources[0] if sources else GeneratorConstants.SCHEMA_URL
+        )
+    GeneratedSources.write(rows)
+    print(f"wrote {len(rows)} endpoints", file=sys.stderr)
 
 
 if __name__ == "__main__":
-    TARGET.write_text(build(), encoding="utf-8")
-    import importlib.util
-
-    spec = importlib.util.spec_from_file_location("_endpoints", TARGET)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    write_mixins(module.ENDPOINTS)
-    write_shortcuts(module.ENDPOINTS)
-    format_generated()
-    print(f"wrote {len(module.ENDPOINTS)} endpoints", file=sys.stderr)
+    main(sys.argv[1:])

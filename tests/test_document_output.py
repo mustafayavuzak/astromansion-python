@@ -12,7 +12,7 @@ import pytest
 import respx
 
 from astromansion import AstroMansion, AsyncAstroMansion
-from astromansion._endpoints import ENDPOINTS
+from astromansion.models.constants.endpoints import EndpointConstants
 
 BASE = "https://api.astromansion.com"
 KEY = "am_test_key"
@@ -20,7 +20,7 @@ BIRTH = {"date": "1990-07-19", "lat": 41.0082, "lon": 28.9784}
 BLOB = b"%PDF-1.4 or <svg/> or PNG, the client does not care"
 
 #: Endpoints whose success is a document rather than JSON.
-BINARY = tuple(e for e in ENDPOINTS if e.binary)
+BINARY = tuple(e for e in EndpointConstants.ALL if e.binary)
 
 
 def _arguments(endpoint: Any) -> tuple[tuple[Any, ...], dict[str, Any]]:
@@ -119,7 +119,7 @@ def test_the_shortcut_carries_output_too(endpoint: Any) -> None:
 
 def test_a_json_endpoint_is_not_given_a_path_to_write() -> None:
     """``output`` on a method that answers with data would mean nothing."""
-    for endpoint in ENDPOINTS:
+    for endpoint in EndpointConstants.ALL:
         if endpoint.binary:
             continue
         parameters = inspect.signature(

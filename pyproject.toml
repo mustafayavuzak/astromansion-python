@@ -46,7 +46,7 @@ dev = [
 # One source for the version. Listing it here as well would let the package
 # metadata and the User-Agent disagree about which release is running.
 [tool.hatch.version]
-path = "src/astromansion/constants.py"
+path = "src/astromansion/models/constants/package.py"
 pattern = "VERSION: Final\\[str\\] = \"(?P<version>[^\"]+)\""
 
 [tool.hatch.build.targets.wheel]
@@ -65,8 +65,11 @@ include = [
     "pyproject.toml",
 ]
 
+# The docstring examples in src/ run with the suite, so an example that no
+# longer matches the code fails like a test.
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests", "src", "tools"]
+addopts = "--doctest-modules"
 asyncio_mode = "auto"
 
 [tool.ruff]
@@ -82,7 +85,7 @@ ignore = ["RUF001", "RUF002", "RUF003"]
 
 [tool.ruff.lint.per-file-ignores]
 "src/astromansion/_methods*.py" = ["E501"]
-"src/astromansion/_endpoints.py" = ["E501"]
+"src/astromansion/models/constants/endpoints.py" = ["E501"]
 "tools/generate_endpoints.py" = ["E501"]
 
 [tool.mypy]

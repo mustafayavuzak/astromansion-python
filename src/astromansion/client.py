@@ -1,4 +1,13 @@
-"""Synchronous AstroMansion API client."""
+"""src/astromansion/client.py: The synchronous AstroMansion client.
+
+Every endpoint the API publishes is a method, generated from the API's schema
+into :class:`SyncEndpoints`. This class adds the transport the generated
+methods call, the catalog walk, and the one endpoint written by hand::
+
+    client.natal(...) ──► _chart ──► request ──► httpx ──► Responses.decode
+                                       │  retry on 429/5xx without a quota code
+                                       └► AstroMansionConnectionError when no answer
+"""
 
 from __future__ import annotations
 
@@ -9,42 +18,40 @@ from typing import Any
 
 import httpx
 
-from . import _core, config
+from ._backoff import Backoff
+from ._bodies import RequestBodies
+from ._credentials import Credentials
 from ._methods import SyncEndpoints
-from .constants import Catalog, Package, Retry, Timeouts
-from .errors import AstroMansionConnectionError, ErrorPolicy, ServerError
-from .response import Result
+from ._paging import CatalogPages
+from ._responses import Responses
+from .errors import AstroMansionConnectionError, ErrorPolicy
+from .models.constants.bodies import RequestBodyConstants
+from .models.constants.catalog import CatalogConstants
+from .models.constants.transport import RetryConstants, TimeoutConstants
 
 
 class AstroMansion(SyncEndpoints):
     """Talk to the AstroMansion API.
 
-    The key is read from :func:`astromansion.set_api_key` or the
-    ``ASTROMANSION_API_KEY`` environment variable when it is not passed, which
-    keeps it out of source files.
-
-    Usage::
-
-        from astromansion import AstroMansion
-
-        client = AstroMansion()
-        chart = client.natal(date="2000-01-01", time="12:00",
-                             lat=51.4779, lon=0.0,
-                             timezone="Europe/London")
-        print(chart.summary.Sun.sign)
-
     The instance holds a connection pool, so build one and keep it. It is also
-    a context manager, which closes the pool on exit.
+    a context manager, which closes the pool on exit. The key is read from the
+    argument, then :func:`astromansion.set_api_key`, then
+    ``ASTROMANSION_API_KEY``, which keeps it out of source files.
 
-    :param api_key: API key. Falls back to the module key, then the
-        environment.
-    :param base_url: API root. Falls back to ``ASTROMANSION_BASE_URL``, then
-        production. A trailing slash is trimmed.
-    :param timeout: Read timeout in seconds, or an ``httpx.Timeout``.
-    :param max_retries: Retries for connection failures, rate limits and
-        server errors. Validation and permission failures are never retried.
-    :param require_key: Refuse before the network when no key is available.
-        Set False to reach the endpoints the API serves to visitors.
+    Attributes:
+        base_url: The API root requests go to, without a trailing slash.
+        max_retries: Repeats allowed after a failed first attempt.
+
+    Examples:
+        Build, call, and close::
+
+            from astromansion import AstroMansion
+
+            with AstroMansion() as client:
+                chart = client.natal(date="2000-01-01", time="12:00",
+                                     lat=51.4779, lon=0.0,
+                                     timezone="Europe/London")
+                print(chart.summary.Sun.sign)
     """
 
     def __init__(
@@ -52,46 +59,78 @@ class AstroMansion(SyncEndpoints):
         api_key: str | None = None,
         *,
         base_url: str | None = None,
-        timeout: float | httpx.Timeout = Timeouts.READ,
-        max_retries: int = Retry.MAX_ATTEMPTS,
+        timeout: float | httpx.Timeout = TimeoutConstants.READ_SECONDS,
+        max_retries: int = RetryConstants.MAX_RETRIES,
         require_key: bool = True,
         transport: httpx.BaseTransport | None = None,
     ) -> None:
-        self._api_key = _core.Credentials.resolve(api_key)
+        """Resolve the key and open the connection pool.
+
+        The key is checked before httpx reads the proxy environment, so a
+        missing key is reported as a missing key.
+
+        Args:
+            api_key: API key. Falls back to the shared key, then the environment.
+            base_url: API root. Falls back to ``ASTROMANSION_BASE_URL``, then
+                production. A trailing slash is trimmed.
+            timeout: Read timeout in seconds, or an ``httpx.Timeout``.
+            max_retries: Retries for connection failures, rate limits, and
+                server errors. Validation and permission failures are never
+                retried. Negative values count as zero.
+            require_key: Refuse before the network when no key is available.
+                Set False to reach the endpoints the API serves to visitors.
+            transport: An httpx transport to send through, as tests do.
+
+        Raises:
+            AuthenticationError: ``require_key`` is set and no key was found.
+        """
+        self._api_key = Credentials.resolve(api_key)
         self._require_key = bool(require_key)
         if self._require_key:
-            _core.Credentials.require(self._api_key)
-        self.base_url = _core.Credentials.base_url(base_url)
+            Credentials.require(self._api_key)
+        self.base_url = Credentials.base_url(base_url)
         self.max_retries = max(0, int(max_retries))
         self._client = httpx.Client(
             base_url=self.base_url,
             timeout=(
                 timeout
                 if isinstance(timeout, httpx.Timeout)
-                else httpx.Timeout(timeout, connect=Timeouts.CONNECT)
+                else httpx.Timeout(timeout, connect=TimeoutConstants.CONNECT_SECONDS)
             ),
-            headers=_core.Credentials.headers(self._api_key, Package.user_agent()),
+            headers=Credentials.headers(self._api_key),
             transport=transport,
         )
 
     def __enter__(self) -> AstroMansion:
+        """Enter a ``with`` block.
+
+        Returns:
+            This client.
+        """
         return self
 
     def __exit__(self, *_exc: object) -> None:
+        """Close the connection pool on leaving the ``with`` block.
+
+        Args:
+            _exc: The exception details, which are not suppressed.
+        """
         self.close()
 
     def close(self) -> None:
-        """Release the connection pool."""
+        """Release the connection pool. The client cannot send after this."""
         self._client.close()
 
     def __repr__(self) -> str:
-        # Masked deliberately: reprs reach logs, tracebacks and notebooks.
+        """Describe the client with its key masked, since reprs reach logs.
+
+        Returns:
+            The base URL and the masked key.
+        """
         return (
             f"AstroMansion(base_url={self.base_url!r}, "
-            f"api_key={_core.Credentials.mask(self._api_key)!r})"
+            f"api_key={Credentials.mask(self._api_key)!r})"
         )
-
-    # ---------------------------------------------------------------- core
 
     def request(
         self,
@@ -106,26 +145,39 @@ class AstroMansion(SyncEndpoints):
     ) -> Any:
         """Call any endpoint, including ones without a named method here.
 
-        The API publishes more endpoints than this class names, so this is the
-        supported way to reach the rest::
+        The API publishes more endpoints than a release may name, so this is
+        the supported way to reach the rest. Authentication, timeouts,
+        retries, and error mapping behave exactly as for the named methods.
 
-            client.request("POST", "/v1/harmonics", json={"birth": {...}})
+        Args:
+            method: HTTP verb.
+            path: A path beginning with ``/v1/``.
+            require_key: Override the client's key requirement for this call.
+            binary: Whether a success is a document rather than JSON.
+            technique: Endpoint name the result reports when the body names none.
+            enveloped: Whether a success is wrapped in ``{technique, result}``;
+                ``None`` lets the body decide.
+            **kwargs: Passed to httpx, notably ``json`` and ``params``.
 
-        Authentication, timeouts, retries and error mapping behave exactly as
-        they do for the named methods.
+        Returns:
+            A :class:`Result` for JSON, ``str`` for ``text/plain``, and
+            ``bytes`` for any other document.
 
-        :param method: HTTP verb.
-        :param path: Path beginning with ``/v1/``.
-        :param require_key: Override the client's key requirement.
-        :param kwargs: Passed to the transport, notably ``json``.
-        :returns: Decoded response; a mapping gains attribute access, a
-            non-JSON body is returned as bytes.
-        :raises AstroMansionError: The API refused, or never answered.
+        Raises:
+            ValidationError: The path is not a published API path.
+            AuthenticationError: A key is required and none was found.
+            AstroMansionConnectionError: No answer arrived after every retry.
+            AstroMansionError: The API refused the call.
+
+        Examples:
+            Reach an endpoint by path::
+
+                client.request("POST", "/v1/harmonics", json={"birth": {...}})
         """
-        _core.Route.check(path)
+        Credentials.check_path(path)
         needs_key = self._require_key if require_key is None else require_key
         if needs_key:
-            _core.Credentials.require(self._api_key)
+            Credentials.require(self._api_key)
 
         last: Exception | None = None
         for attempt in range(self.max_retries + 1):
@@ -139,21 +191,18 @@ class AstroMansion(SyncEndpoints):
                     raise AstroMansionConnectionError(
                         f"could not reach the AstroMansion API: {error}",
                     ) from error
-                time.sleep(_core.Backoff.delay(attempt, None))
+                time.sleep(Backoff.delay(attempt, None))
                 continue
 
             if attempt < self.max_retries and ErrorPolicy.is_retryable(
                 response.status_code,
-                _core.Envelope.code_of(response),
+                Responses.error_code(response),
             ):
                 time.sleep(
-                    _core.Backoff.delay(
-                        attempt,
-                        _core.Backoff.parse_header(response.headers.get("Retry-After")),
-                    )
+                    Backoff.delay(attempt, Backoff.retry_after(response.headers))
                 )
                 continue
-            return _decode(response, binary, technique, enveloped)
+            return Responses.decode(response, binary, technique, enveloped)
 
         raise AstroMansionConnectionError(
             f"could not reach the AstroMansion API: {last}",
@@ -163,7 +212,7 @@ class AstroMansion(SyncEndpoints):
         self,
         *categories: str,
         payload: dict[str, Any] | None = None,
-        page_size: int = Catalog.PAGE_MAX,
+        page_size: int = CatalogConstants.PAGE_MAX,
         options: dict[str, Any] | None = None,
         confirm_large: bool = False,
         on_page: Callable[[int, int, dict[str, list[Any]]], None] | None = None,
@@ -173,155 +222,121 @@ class AstroMansion(SyncEndpoints):
 
         ``chart`` answers one page at a time and the catalog is larger than
         one page, so this walks it. Naming several categories reads them in
-        one walk rather than one walk each::
+        one walk rather than one walk each, and the return is always a
+        mapping keyed by the categories asked for.
 
-            found = client.bodies(
-                "fixed_stars", "arabic_lots",
-                date="2000-01-01", time="12:00",
-                lat=51.4779, lon=0.0, timezone="Europe/London",
-            )
-            found["fixed_stars"]   # every star
-            found["arabic_lots"]   # every lot
+        A walk needing more than twelve requests stops after the first page
+        and names the size, since nothing prints until the last page lands.
+        ``asteroids`` is twenty-eight thousand bodies and 177 round trips.
 
-        The return is always a mapping keyed by the categories asked for, one
-        category or several, so the shape never depends on how many.
+        Args:
+            *categories: Category keys, such as ``fixed_stars``.
+            payload: Birth fields as one mapping, instead of keywords.
+            page_size: Bodies per request. Lowering it buys only round trips;
+                the default is the largest page the API serves.
+            options: Further chart options, carried on every page.
+            confirm_large: Read a category too large to read by accident.
+            on_page: Called after each page with the requests made, the
+                requests still expected, and the rows gathered so far.
+            **fields: Birth fields passed as keywords.
 
-        Some categories are enormous. ``asteroids`` is twenty-eight thousand
-        bodies and a hundred and seventy-seven round trips, which looks like
-        a hung program because nothing is printed until the last page lands.
-        A walk that turns out that large stops after the first page and tells
-        you the size; pass ``confirm_large=True`` to read it anyway, or
-        ``on_page`` to watch it arrive.
+        Returns:
+            Each category asked for, mapped to all of its rows.
 
-        :param categories: Category keys, such as ``fixed_stars``.
-        :param payload: Birth fields as a mapping, instead of keywords.
-        :param page_size: Bodies per request. Lower it and you buy nothing
-            but round trips; the default is the largest the API serves.
-        :param options: Further chart options, carried on every page.
-        :param confirm_large: Read a category too large to read by accident.
-        :param on_page: Called after each page with the request count, the
-            requests still expected, and the rows gathered so far.
-        :param fields: Birth fields passed flat.
-        :returns: Mapping from category key to its rows.
-        :raises ValidationError: No category, a page size the API refuses, or
-            a category large enough to need ``confirm_large``.
-        :raises AstroMansionError: The API refused, or never answered.
+        Raises:
+            ValidationError: No category, a page size the API refuses, or a
+                category large enough to need ``confirm_large``.
+            ServerError: The answers never ended the walk.
+            AstroMansionError: The API refused, or never answered.
+
+        Examples:
+            Read two categories in one walk::
+
+                found = client.bodies(
+                    "fixed_stars", "arabic_lots",
+                    date="2000-01-01", time="12:00",
+                    lat=51.4779, lon=0.0, timezone="Europe/London",
+                )
+                len(found["fixed_stars"])   # 906
         """
         collected: dict[str, list[Any]] = {name: [] for name in categories}
         offset = 0
-        for pass_number in range(Catalog.PAGE_CEILING):
+        for pass_number in range(CatalogConstants.PAGE_CEILING):
             page = self._chart(
-                "/v1/chart",
+                CatalogConstants.PATH,
                 payload,
-                _core.Pages.options(categories, options, offset, page_size),
-                technique="chart",
+                CatalogPages.options(categories, options, offset, page_size),
+                technique=CatalogConstants.TECHNIQUE,
                 **fields,
             )
             requests = pass_number + 1
-            following = _core.Pages.absorb(page, collected, offset)
+            following = CatalogPages.absorb(page, collected, offset)
             if requests == 1 and not confirm_large:
-                _core.Pages.guard_size(page, page_size, categories)
+                CatalogPages.guard_size(page, page_size, categories)
             if on_page is not None:
-                on_page(requests, _core.Pages.remaining(page, page_size), collected)
+                on_page(requests, CatalogPages.remaining(page, page_size), collected)
             if following is None:
                 return collected
             offset = following
-        raise ServerError(
-            f"the catalog walk passed {Catalog.PAGE_CEILING} pages without "
-            "reaching the end; returning what was read would look complete "
-            "while missing the rest",
-            error_code="pagination",
-        )
+        raise CatalogPages.exhausted()
 
-    # The generated twin takes one body mapping; this keeps the two
-    # charts positional, which is the signature already released.
-    def render_sharecard(  # type: ignore[override]
+    def render_sharecard(
         self,
         birth: dict[str, Any] | None = None,
         partner: dict[str, Any] | None = None,
         *,
-        type: str = "synastry",
+        type: str = RequestBodyConstants.SHARECARD_SYNASTRY,
         name: str | None = None,
         names: tuple[str, ...] | list[str] | None = None,
         lang: str | None = None,
         output: str | Path | None = None,
         **extra: Any,
     ) -> bytes | Path:
-        """Story card for one chart or for two. Wraps ``POST /v1/render/sharecard``.
+        """Draw a story card for one or two charts (``POST /v1/render/sharecard``).
 
-        One endpoint draws both cards. ``type="synastry"`` reads both charts
-        and leads on the compatibility score; ``type="natal"`` reads ``birth``
-        alone and leads on the Sun, Moon and Ascendant.
+        ``type="synastry"`` reads both charts and leads on the compatibility
+        score; ``type="natal"`` reads ``birth`` alone and leads on the Sun,
+        Moon, and Ascendant. Written by hand so the two charts stay
+        positional, as they were before the natal card existed.
 
-        Written by hand rather than generated so the two charts stay
-        positional: they were positional before the natal card existed, and a
-        released signature is not worth breaking over a new option.
+        Args:
+            birth: The chart as a mapping, or the first of two. Birth fields
+                may also be passed flat among ``extra``.
+            partner: The second chart. Required for a synastry card.
+            type: ``synastry`` or ``natal``.
+            name: The single display name a natal card prints.
+            names: Display names, one for a natal card and two for a synastry card.
+            lang: Card language, ``en`` or ``tr``.
+            output: Path to write the SVG to, or ``None`` for the bytes.
+            **extra: Further body fields, or one chart's birth fields.
 
-        :param birth: The chart as a mapping, or the first of two. Birth
-            fields may also be passed flat, as the other chart methods take
-            them.
-        :param partner: The second chart. Required for a synastry card.
-        :param type: ``synastry`` or ``natal``.
-        :param name: The single display name a natal card prints. Shorthand
-            for a one-entry ``names``, so a one-chart card does not have to
-            invent a second person.
-        :param names: Display names: one for a natal card, two for a synastry
-            card.
-        :param lang: Card language, ``en`` or ``tr``.
-        :param output: Path to write the SVG to, or ``None`` for the bytes.
-        :returns: The SVG bytes, or the path written.
+        Returns:
+            The SVG bytes, or the path written.
+
+        Raises:
+            ValueError: Both ``name`` and ``names`` were given.
+            ValidationError: A birth field is malformed, or the API refused the card.
+            AstroMansionError: The API refused, or never answered.
         """
-        # Three call styles reach the same body: two mappings positionally,
-        # the same as keywords, or one chart's fields passed flat.
-        chart = (
-            dict(birth)
-            if birth is not None
-            else {
-                key: extra.pop(key)
-                for key in list(extra)
-                if key in config.Body.BIRTH_FIELDS
-            }
-        )
-        body: dict[str, Any] = {"birth": config.Body.birth(**chart), "type": type}
-        if partner is not None:
-            body["partner"] = config.Body.birth(**partner)
-        if name is not None and names is not None:
-            raise ValueError("pass either name or names, not both")
-        if name is not None:
-            body["names"] = [name]
-        elif names is not None:
-            body["names"] = list(names)
-        if lang is not None:
-            body["lang"] = lang
-        body.update({key: value for key, value in extra.items() if value is not None})
-        return self._document(
+        return Responses.save_document(
             self.request(
                 "POST",
-                "/v1/render/sharecard",
-                json=body,
+                RequestBodyConstants.SHARECARD_PATH,
+                json=RequestBodies.sharecard(
+                    birth,
+                    partner,
+                    card_type=type,
+                    name=name,
+                    names=names,
+                    lang=lang,
+                    extra=extra,
+                ),
                 binary=True,
-                technique="render_sharecard",
+                technique=RequestBodyConstants.SHARECARD_TECHNIQUE,
                 enveloped=None,
             ),
             output,
         )
-
-    @staticmethod
-    def _document(content: bytes, output: str | Path | None) -> bytes | Path:
-        """Return a document, or the path it was written to.
-
-        Bytes come back unless a path is named, so a call cannot overwrite a
-        file the caller did not choose.
-
-        :param content: The decoded response.
-        :param output: Path to write to, or ``None`` to keep the bytes.
-        :returns: The bytes, or the path written.
-        """
-        if output is None:
-            return content
-        destination = Path(output)
-        destination.write_bytes(content)
-        return destination
 
     def _chart(
         self,
@@ -334,13 +349,27 @@ class AstroMansion(SyncEndpoints):
         enveloped: bool | None = None,
         **fields: Any,
     ) -> Any:
+        """Send a one-person request, the hook every generated chart method calls.
+
+        Args:
+            path: The endpoint's path.
+            payload: Birth fields as one mapping, if the caller passed one.
+            options: The endpoint's options.
+            binary: Whether a success is a document.
+            technique: The endpoint's name.
+            enveloped: Whether a success is wrapped, or ``None``.
+            **fields: Birth fields passed as keywords.
+
+        Returns:
+            What :meth:`request` returns.
+        """
         return self.request(
             "POST",
             path,
             binary=binary,
             technique=technique,
             enveloped=enveloped,
-            json=config.Body.chart(payload, options, fields),
+            json=RequestBodies.chart(payload, options, fields),
         )
 
     def _pair(
@@ -355,50 +384,26 @@ class AstroMansion(SyncEndpoints):
         enveloped: bool | None = None,
         **extra: Any,
     ) -> Any:
+        """Send a two-person request, the hook every generated pair method calls.
+
+        Args:
+            path: The endpoint's path.
+            birth: The first person's birth fields.
+            partner: The second person's birth fields.
+            options: The endpoint's options.
+            binary: Whether a success is a document.
+            technique: The endpoint's name.
+            enveloped: Whether a success is wrapped, or ``None``.
+            **extra: Further top-level body fields.
+
+        Returns:
+            What :meth:`request` returns.
+        """
         return self.request(
             "POST",
             path,
             binary=binary,
             technique=technique,
             enveloped=enveloped,
-            json=config.Body.pair(birth, partner, options, extra),
+            json=RequestBodies.pair(birth, partner, options, extra),
         )
-
-
-def _decode(
-    response: httpx.Response,
-    binary: bool = False,
-    technique: str | None = None,
-    enveloped: bool | None = None,
-) -> Any:
-    """Raise on failure, otherwise return the decoded body.
-
-    Shared by both clients so a status means the same thing in each.
-    """
-    payload: Any = None
-    if not binary:
-        try:
-            payload = response.json()
-        except ValueError:
-            payload = None
-    elif response.status_code >= 400:
-        # A failed document request still answers with the JSON envelope.
-        try:
-            payload = response.json()
-        except ValueError:
-            payload = None
-    _core.Envelope.raise_for_status(
-        response.status_code,
-        payload,
-        response.headers,
-        response.headers.get("X-Request-ID"),
-    )
-    if payload is None:
-        if _core.Media.is_text(response.headers.get("Content-Type")):
-            # A rendered table is meant to be printed. Handing back bytes
-            # would print the repr, escape sequences and all, and the box
-            # drawing the server sent would be unreadable.
-            return response.text
-        # A success that is not JSON is a document: PDF, PNG, SVG or CSV.
-        return response.content
-    return Result.build(payload, technique=technique, enveloped=enveloped)

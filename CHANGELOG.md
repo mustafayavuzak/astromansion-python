@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.0
 
 - The README opens with a way to try the API before signing up:
   `AstroMansion(require_key=False)` reaches the natal endpoint as a visitor.
@@ -9,8 +9,36 @@
   the first example without a key learns how to try it anyway.
 - The README's account link opens the sign-up form directly, and the key setup
   shows Windows PowerShell and Command Prompt beside the Unix shell.
+- The README no longer lists `white_moon` as a category or a MansionSQL table.
+  The API files White Moon under `hypotheticals`, and the `white_moon`
+  selector now answers that whole group.
 
   The client request surface is unchanged.
+- The package's inside is reorganised so each concern has one home. Named
+  values moved from `astromansion.constants` and `astromansion.config` into
+  `astromansion.models.constants`, one module per domain. Request bodies, the
+  API key, retry waits, response decoding, and catalog paging each live in
+  their own module, shared by the synchronous and the asynchronous client.
+  The two environment variables are read in one place, the new
+  `astromansion.settings`. Nothing imported from `astromansion` itself
+  changed, and every method keeps its signature. Four things changed for code
+  that reached inside:
+  - The modules `astromansion.constants`, `astromansion.config`, and
+    `astromansion._core` are gone. Their values live under
+    `astromansion.models.constants`.
+  - The generated endpoint table moved from `astromansion._endpoints` to
+    `EndpointConstants.ALL` and `EndpointConstants.BY_NAME` in
+    `astromansion.models.constants.endpoints`. `Endpoint` is now a frozen
+    dataclass in `astromansion.models.dataclasses.endpoints`. The generated
+    mixins no longer carry a `render_sharecard` that the clients' own method
+    always overrode.
+  - `ErrorPolicy` no longer carries `BY_STATUS`, `QUOTA_CODES`, or
+    `SERVER_FLOOR`. `ErrorPolicy.for_response` still picks the exception, and
+    the new `ErrorPolicy.is_quota` tells a spent quota from a busy moment.
+  - `Result.ENVELOPE_KEYS` is now `EnvelopeConstants.KEYS` in
+    `astromansion.models.constants.envelope`.
+- Every public class and function documents its arguments, return value, and
+  errors, and the examples in those docstrings run with the test suite.
 
 ## 0.2.3
 
