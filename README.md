@@ -22,19 +22,63 @@ Python 3.10 or newer. The only dependency is `httpx`, installed with its SOCKS
 support so the client still works behind a corporate proxy, a local SOCKS
 proxy or Tor without anything further to install.
 
+## Try it without an account
+
+The natal chart endpoint also answers visitors, under the API's
+[visitor limits](https://astromansion.com/en/docs#limits), which are counted
+per IP address. Ask for that explicitly:
+
+```python
+from astromansion import AstroMansion
+
+client = AstroMansion(require_key=False)
+
+chart = client.natal(
+    date="2000-01-01",
+    time="12:00",
+    lat=51.4779,
+    lon=0.0,
+    timezone="Europe/London",
+)
+
+print(chart.summary.Sun.sign)
+```
+
+Without `require_key=False` a missing key is still an error, so an application
+that lost its key fails at once instead of quietly running on visitor limits.
+
 ## Get an API key
 
-Create an account at [astromansion.com](https://astromansion.com), open your
-account page and generate a key. Requests made with it count against that
+[Create a free account](https://astromansion.com/en/developers?ref=python-sdk#register),
+confirm your email address, then open your account page and generate a key.
+The Free plan costs nothing. Requests made with the key count against that
 account, under the plan it already has.
 
 ## First chart
 
-Put the key in the environment rather than in your source:
+Put the key in the environment rather than in your source.
+
+macOS and Linux:
 
 ```bash
 export ASTROMANSION_API_KEY="your key"
 ```
+
+Windows PowerShell:
+
+```powershell
+$env:ASTROMANSION_API_KEY = "your key"
+```
+
+Windows Command Prompt:
+
+```bat
+set ASTROMANSION_API_KEY=your key
+```
+
+Each of these lasts for the current terminal. On Windows,
+`setx ASTROMANSION_API_KEY "your key"` keeps it for every terminal opened
+afterwards.
 
 ```python
 from astromansion import AstroMansion
@@ -76,6 +120,10 @@ environment is read, so a forgotten key is reported as a forgotten key.
 ```python
 client = AstroMansion(api_key="your key")
 ```
+
+`AstroMansion(require_key=False)` lifts that check. A key found in any of the
+three places is still sent, and without one the request goes out as a
+visitor's.
 
 `astromansion.reset()` drops the module key and the shared client, which is
 what a test wants between cases.

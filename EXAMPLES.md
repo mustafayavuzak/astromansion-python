@@ -8,6 +8,15 @@ export ASTROMANSION_API_KEY="your key"
 pip install astromansion
 ```
 
+On Windows PowerShell, set the key with:
+
+```powershell
+$env:ASTROMANSION_API_KEY = "your key"
+```
+
+No key yet? `AstroMansion(require_key=False)` runs the natal example as a
+visitor, as the README's "Try it without an account" shows.
+
 The examples use this birth data:
 
 ```python

@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- The README opens with a way to try the API before signing up:
+  `AstroMansion(require_key=False)` reaches the natal endpoint as a visitor.
+  The option existed already but was documented only in the class reference.
+- The missing-key error now names `require_key=False`, so a newcomer who runs
+  the first example without a key learns how to try it anyway.
+- The README's account link opens the sign-up form directly, and the key setup
+  shows Windows PowerShell and Command Prompt beside the Unix shell.
+
+  The client request surface is unchanged.
+
 ## 0.2.3
 
 - Generated endpoint methods now preserve the transport's concrete return

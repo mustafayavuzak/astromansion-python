@@ -122,6 +122,21 @@ def test_a_missing_key_fails_before_any_request_is_sent() -> None:
         assert not route.called, "anahtarsiz istek yine de gonderildi"
 
 
+def test_the_missing_key_error_names_the_visitor_option() -> None:
+    """The refusal tells a newcomer how to try the API before signing up."""
+    with pytest.raises(AuthenticationError, match=r"require_key=False"):
+        AstroMansion()
+
+
+@respx.mock
+def test_require_key_false_sends_a_request_without_a_key() -> None:
+    """Opting out of the key check reaches the visitor endpoints keyless."""
+    route = respx.post(f"{BASE}/v1/natal").mock(httpx.Response(200, json=NATAL))
+    chart = AstroMansion(require_key=False).natal(**BIRTH)
+    assert chart.summary.Sun.sign == "Cancer"
+    assert "X-API-Key" not in route.calls.last.request.headers
+
+
 @respx.mock
 def test_two_clients_keep_their_own_keys() -> None:
     route = respx.post(f"{BASE}/v1/natal").mock(httpx.Response(200, json=NATAL))

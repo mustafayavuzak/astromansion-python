@@ -100,13 +100,17 @@ class Credentials:
 
         A local failure names the missing configuration. Sending the request
         instead spends a round trip to be told the same thing less clearly.
+        The message also names ``require_key=False``, the explicit way to try
+        the endpoints the API serves to visitors before creating an account.
 
         :raises AuthenticationError: No key from any source.
         """
         if not api_key:
             raise AuthenticationError(
                 "No API key. Pass AstroMansion(api_key=...), call "
-                f"astromansion.set_api_key(...), or set {Api.KEY_ENV}.",
+                f"astromansion.set_api_key(...), or set {Api.KEY_ENV}. "
+                "To try the visitor endpoints without an account, pass "
+                "AstroMansion(require_key=False).",
                 error_code="missing_api_key",
             )
 
