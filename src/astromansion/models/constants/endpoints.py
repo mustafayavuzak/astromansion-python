@@ -121,7 +121,7 @@ class EndpointConstants:
             kind="get",
             fields=(),
             binary=False,
-            enveloped=None,
+            enveloped=False,
             summary="List saved custom bodies",
         ),
         Endpoint(
@@ -139,7 +139,7 @@ class EndpointConstants:
                 "aspects",
             ),
             binary=False,
-            enveloped=None,
+            enveloped=False,
             summary="Save and calculate a named custom Keplerian body",
         ),
         Endpoint(
@@ -149,7 +149,7 @@ class EndpointConstants:
             kind="birth_extra",
             fields=("birth", "wheel", "aspects"),
             binary=False,
-            enveloped=None,
+            enveloped=False,
             summary="Calculate a saved custom body by name",
         ),
         Endpoint(
@@ -159,7 +159,7 @@ class EndpointConstants:
             kind="delete",
             fields=("name",),
             binary=False,
-            enveloped=None,
+            enveloped=False,
             summary="Delete a saved custom body",
         ),
         Endpoint(
@@ -379,7 +379,7 @@ class EndpointConstants:
             kind="get",
             fields=("job_id",),
             binary=False,
-            enveloped=True,
+            enveloped=False,
             summary="Inspect job status",
         ),
         Endpoint(

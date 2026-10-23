@@ -686,7 +686,7 @@ class AsyncEndpoints:
             params={k: v for k, v in params.items() if v is not None},
             binary=False,
             technique="custom_bodies",
-            enveloped=None,
+            enveloped=False,
         )
 
     async def save_custom_body(
@@ -711,7 +711,7 @@ class AsyncEndpoints:
             json=RequestBodies.merge(body, fields),
             binary=False,
             technique="save_custom_body",
-            enveloped=None,
+            enveloped=False,
         )
 
     async def chart_with_custom_body(
@@ -737,7 +737,7 @@ class AsyncEndpoints:
             json=RequestBodies.merge(body, fields),
             binary=False,
             technique="chart_with_custom_body",
-            enveloped=None,
+            enveloped=False,
         )
 
     async def delete_custom_body(self, name: str, **params: Any) -> Result:
@@ -759,7 +759,7 @@ class AsyncEndpoints:
             params={k: v for k, v in params.items() if v is not None},
             binary=False,
             technique="delete_custom_body",
-            enveloped=None,
+            enveloped=False,
         )
 
     async def custom_lot(
@@ -1581,7 +1581,7 @@ class AsyncEndpoints:
             params={k: v for k, v in params.items() if v is not None},
             binary=False,
             technique="job",
-            enveloped=True,
+            enveloped=False,
         )
 
     async def lunar_return(

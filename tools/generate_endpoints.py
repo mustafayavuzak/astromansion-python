@@ -43,7 +43,8 @@ class GeneratorConstants:
 
     An operation is a document when its answer on its first status in
     ``SUCCESS_STATUSES`` declares media types and none of them is
-    ``JSON_MEDIA_TYPE``. ``HAND_WRITTEN`` lists the endpoints a client writes
+    ``JSON_MEDIA_TYPE``. A success is wrapped when its schema's fields are
+    exactly ``ENVELOPE_FIELDS``. ``HAND_WRITTEN`` lists the endpoints a client writes
     out itself. They keep their row and their shortcut but get no generated
     method, which the hand-written one would otherwise have to override.
     ``render_sharecard`` keeps its two charts positional while ``partner`` is
@@ -74,6 +75,7 @@ class GeneratorConstants:
     SUMMARY_FALLBACK: Final[str] = "Call the endpoint"
 
     JSON_MEDIA_TYPE: Final[str] = "application/json"
+    ENVELOPE_FIELDS: Final[frozenset[str]] = frozenset({"technique", "result"})
     SUCCESS_STATUSES: Final[range] = range(HTTPStatus.OK, HTTPStatus.MULTIPLE_CHOICES)
     HAND_WRITTEN: Final[frozenset[str]] = frozenset({"/v1/render/sharecard"})
 
@@ -620,9 +622,10 @@ class EndpointSchema:
     ) -> bool | None:
         """Return whether a success is wrapped in ``{technique, result}``.
 
-        Read from the published response schema, not guessed from a body: an
-        endpoint whose own data owned a ``result`` field would otherwise be
-        unwrapped and its real payload thrown away.
+        Read from the published response schema, never guessed from a body.
+        The wrapper's fields are exactly ``ENVELOPE_FIELDS``. A schema that
+        owns more fields, such as a job's status beside its ``result``, is the
+        data itself, and opening it would throw the rest of the answer away.
 
         Args:
             operation: The operation object from the schema.
@@ -631,6 +634,17 @@ class EndpointSchema:
         Returns:
             True or False from the schema, or ``None`` when the schema is
             free-form and the shape has to be recognised at runtime.
+
+        Examples:
+            >>> def answer(schema):
+            ...     content = {"application/json": {"schema": schema}}
+            ...     return {"responses": {"200": {"content": content}}}
+            >>> wrapper = {"properties": {"technique": {}, "result": {}}}
+            >>> EndpointSchema.enveloped(answer(wrapper), {})
+            True
+            >>> status = {"properties": {"state": {}, "technique": {}, "result": {}}}
+            >>> EndpointSchema.enveloped(answer(status), {})
+            False
         """
         try:
             schema = operation["responses"]["200"]["content"][
@@ -643,7 +657,7 @@ class EndpointSchema:
         fields = set(declared.get("properties") or ())
         if not fields:
             return None
-        return {"technique", "result"} <= fields
+        return fields == GeneratorConstants.ENVELOPE_FIELDS
 
     @staticmethod
     def summary(operation: Mapping[str, Any]) -> str:

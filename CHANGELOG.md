@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.3.2
+
+- `job` returns a job's whole status again. 0.3.0 and 0.3.1 took the status
+  for a `{technique, result}` wrapper, because it owns a `result` beside its
+  state. A queued or running job therefore read as its empty result, and its
+  state was reachable only through `raw`. A wrapper is now a body whose
+  fields are exactly `technique` and `result`.
+- The endpoint table follows the API's current schema, which now publishes
+  the custom body answers as models. `save_custom_body`,
+  `chart_with_custom_body`, `custom_bodies`, and `delete_custom_body` read
+  their answers as data by the schema, which is how they were already read.
+
 ## 0.3.1
 
 - `export_report` returns the PDF as bytes, or writes it to the path given

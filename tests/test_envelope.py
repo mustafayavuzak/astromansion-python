@@ -96,3 +96,27 @@ def test_the_schema_decides_when_it_knows() -> None:
     assert flat.technique is None
     assert flat["technique"] == "x"
     assert flat["result"] == {"a": 1}
+
+
+@respx.mock
+def test_a_job_s_status_is_read_whole_while_it_runs() -> None:
+    """A job's status owns a ``result`` beside its state, and is never opened.
+
+    0.3.0 and 0.3.1 took the status for the wrapper, so a running job read as
+    its empty result and its state was reachable only through ``raw``.
+    """
+    status = {
+        "id": "j1",
+        "state": "running",
+        "technique": "transits",
+        "kind": "single",
+        "result": None,
+        "error": None,
+        "created_at": "2026-10-23T09:00:00Z",
+        "finished_at": None,
+        "webhook": None,
+    }
+    respx.get(f"{BASE}/v1/jobs/j1").mock(httpx.Response(200, json=status))
+    job = _client().job("j1")
+    assert job.state == "running"
+    assert job.result is None
