@@ -196,7 +196,7 @@ async with AsyncAstroMansion() as client:
 
 Same method names, same arguments, same exceptions. Python cannot make one
 class serve both, so the bare name is synchronous and `Async` marks the other,
-as in `httpx`, `openai` and `anthropic`.
+as in `httpx` and `openai`.
 
 ## Reading a response
 

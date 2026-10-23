@@ -34,13 +34,13 @@ class KeyMaskConstants:
 
     A repr reaches logs, tracebacks, and notebooks, so a key is shown as its
     first ``VISIBLE_PREFIX_CHARS`` characters, ``ELLIPSIS``, and its last
-    ``VISIBLE_SUFFIX_CHARS``. A key no longer than ``SHORT_KEY_MAX_CHARS`` is
-    shown as ``ELLIPSIS`` alone, since its two ends would be all of it.
-    ``ABSENT`` stands for no key at all.
+    ``VISIBLE_SUFFIX_CHARS``. ``SHORT_KEY_MAX_CHARS`` is the two ends together.
+    A key no longer than that is shown as ``ELLIPSIS`` alone, since its two
+    ends would be all of it. ``ABSENT`` stands for no key at all.
     """
 
     VISIBLE_PREFIX_CHARS: Final[int] = 8
     VISIBLE_SUFFIX_CHARS: Final[int] = 4
-    SHORT_KEY_MAX_CHARS: Final[int] = 8
+    SHORT_KEY_MAX_CHARS: Final[int] = VISIBLE_PREFIX_CHARS + VISIBLE_SUFFIX_CHARS
     ELLIPSIS: Final[str] = "…"
     ABSENT: Final[str] = "none"

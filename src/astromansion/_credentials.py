@@ -138,13 +138,14 @@ class Credentials:
             api_key: The key, or ``None``.
 
         Returns:
-            Its first eight characters, an ellipsis, and its last four; an
-            ellipsis alone for a short key; ``none`` for no key.
+            Its first eight characters, an ellipsis, and its last four. A key
+            of at most twelve characters becomes an ellipsis alone, since its
+            two ends would be all of it. No key becomes ``none``.
 
         Examples:
             >>> Credentials.mask("am_live_0123456789abcdef")
             'am_live_…cdef'
-            >>> Credentials.mask("short")
+            >>> Credentials.mask("am_live_0123")
             '…'
             >>> Credentials.mask(None)
             'none'

@@ -26,6 +26,7 @@ from astromansion import (
     ServerError,
     ValidationError,
 )
+from astromansion.models.constants.api import KeyMaskConstants
 
 BASE = "https://api.astromansion.com"
 KEY = "am_live_testkey_0123456789abcdef"
@@ -152,6 +153,29 @@ def test_two_clients_keep_their_own_keys() -> None:
 def test_the_key_never_appears_in_the_repr() -> None:
     text = repr(AstroMansion(api_key=KEY))
     assert KEY not in text
+
+
+@pytest.mark.parametrize(
+    "length",
+    range(
+        1,
+        KeyMaskConstants.VISIBLE_PREFIX_CHARS
+        + KeyMaskConstants.VISIBLE_SUFFIX_CHARS
+        + 1,
+    ),
+)
+def test_a_key_its_two_ends_would_cover_is_hidden_whole(length: int) -> None:
+    """A key no longer than the two ends a mask shows is printed as the ellipsis.
+
+    0.3.0 printed a key of 9 to 12 characters as its first eight and its last
+    four, which together were every character of it.
+
+    Args:
+        length: The key's length, at most the two ends' total.
+    """
+    key = KEY[:length]
+    text = repr(AstroMansion(api_key=key))
+    assert f"api_key={KeyMaskConstants.ELLIPSIS!r}" in text
 
 
 def test_the_key_never_appears_in_an_error() -> None:

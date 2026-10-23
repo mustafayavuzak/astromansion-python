@@ -418,7 +418,7 @@ def export_pdf(payload: dict[str, Any] | None = None, **fields: Any) -> bytes | 
     return default_client().export_pdf(payload, **fields)
 
 
-def export_report(*args: Any, **kwargs: Any) -> Result:
+def export_report(*args: Any, **kwargs: Any) -> bytes | Path:
     """Editable multi-page PDF report.
 
     Forwards to :meth:`AstroMansion.export_report` on the shared client.

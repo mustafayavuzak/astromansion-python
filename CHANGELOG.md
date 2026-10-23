@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.3.1
+
+- `export_report` returns the PDF as bytes, or writes it to the path given
+  as `output`, like every other document method. It already returned the
+  bytes at run time, but its signature promised a `Result` and it took no
+  `output`.
+- A key of 9 to 12 characters is shown as `…` alone in a client's repr.
+  0.3.0 showed its first eight and its last four characters, which together
+  were the whole key. Issued keys are longer and were never shown in full.
+- The method names and the document endpoints now come from the API's
+  schema. Each method is named by its operation's id, and an endpoint whose
+  success declares no JSON is a document. The generator keeps no table of
+  its own for either, and no method name changed.
+- The endpoint table follows the API's current schema. `batch` reads its
+  answer as data and never as a `{technique, result}` wrapper, which is how
+  its answer was already read. The keyword lists in the docstrings of
+  `export_report` and `submit_job` follow the schema's order.
+
 ## 0.3.0
 
 - The README opens with a way to try the API before signing up:

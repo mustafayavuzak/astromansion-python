@@ -31,10 +31,16 @@ def _arguments(endpoint: Any) -> tuple[tuple[Any, ...], dict[str, Any]]:
 
 
 def test_the_binary_endpoints_are_the_ones_this_covers() -> None:
-    """A new document endpoint must not slip past this file unnoticed."""
+    """A new document endpoint must not slip past this file unnoticed.
+
+    0.3.0 kept ``export_report`` out, because its generator listed the
+    document endpoints by hand. The schema now declares each one's media
+    types, and the PDF report is among them.
+    """
     assert {e.name for e in BINARY} == {
         "export_csv",
         "export_pdf",
+        "export_report",
         "render_astrocartography",
         "render_biwheel",
         "render_png",

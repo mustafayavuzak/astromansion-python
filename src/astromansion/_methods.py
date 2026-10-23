@@ -499,7 +499,7 @@ class SyncEndpoints:
             json=RequestBodies.merge(body, fields),
             binary=False,
             technique="batch",
-            enveloped=None,
+            enveloped=False,
         )
 
     def chart(
@@ -1178,28 +1178,35 @@ class SyncEndpoints:
         )
 
     def export_report(
-        self, body: dict[str, Any] | None = None, **fields: Any
-    ) -> Result:
+        self,
+        body: dict[str, Any] | None = None,
+        output: str | Path | None = None,
+        **fields: Any,
+    ) -> bytes | Path:
         """Editable multi-page PDF report. Wraps ``POST /v1/export/report``.
 
         Args:
             body: The request body as one mapping, instead of keyword fields.
-            **fields: Body fields as keywords: ``birth``, ``sections``, ``page_size``, ``title``, ``author``, ``custom_text``, ``accent``, ``white_label``, ``logo_b64``.
+            output: Path to write the document to, or ``None`` for the bytes.
+            **fields: Body fields as keywords: ``sections``, ``page_size``, ``title``, ``author``, ``custom_text``, ``accent``, ``white_label``, ``logo_b64``, ``birth``.
 
         Returns:
-            The decoded response.
+            The document's bytes, or the path it was written to.
 
         Raises:
             TypeError: Both a body mapping and keyword fields were given.
             AstroMansionError: The API refused the call, or never answered.
         """
-        return self.request(
-            "POST",
-            "/v1/export/report",
-            json=RequestBodies.merge(body, fields),
-            binary=False,
-            technique="export_report",
-            enveloped=None,
+        return Responses.save_document(
+            self.request(
+                "POST",
+                "/v1/export/report",
+                json=RequestBodies.merge(body, fields),
+                binary=True,
+                technique="export_report",
+                enveloped=None,
+            ),
+            output,
         )
 
     def firdaria(
@@ -1510,7 +1517,7 @@ class SyncEndpoints:
 
         Args:
             body: The request body as one mapping, instead of keyword fields.
-            **fields: Body fields as keywords: ``technique``, ``body``, ``callback_url``.
+            **fields: Body fields as keywords: ``technique``, ``callback_url``, ``body``.
 
         Returns:
             The decoded response.

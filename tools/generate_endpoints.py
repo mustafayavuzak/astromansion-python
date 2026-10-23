@@ -3,7 +3,8 @@
 Every endpoint the SDK exposes is derived here from the published OpenAPI
 schema, never typed by hand. Writing the operations out manually would
 guarantee that one is missed and that the list drifts the first time the API
-changes.
+changes. The schema names each method by its operation's id and says which
+endpoints answer with a document, so neither is kept in a table here.
 
 Three runs::
 
@@ -26,30 +27,30 @@ from __future__ import annotations
 
 import ast
 import json
+import keyword
 import re
 import subprocess
 import sys
 import urllib.request
 from collections.abc import Mapping, Sequence
+from http import HTTPStatus
 from pathlib import Path
-from types import MappingProxyType
 from typing import Any, Final
 
 
 class GeneratorConstants:
     """Where the generator reads and writes, and the endpoints it treats apart.
 
-    ``RENAMES`` holds the names a path alone cannot produce well, keyed by verb
-    and path so one entry can never be applied to the wrong operation.
-    ``HAND_WRITTEN`` lists the endpoints a client writes out itself. They keep
-    their row and their shortcut but get no generated method, which the
-    hand-written one would otherwise have to override: ``render_sharecard``
-    keeps its two charts positional while ``partner`` is optional, a shape the
-    generator has no rule for. ``BINARY`` lists the endpoints that answer with
-    a document rather than JSON. ``MIXINS`` names each mixin's file, its class,
-    the client it is mixed into, and whether that client awaits.
-    ``SUMMARY_MAX_CHARS`` keeps a generated docstring's first line within the
-    line length the project lints for.
+    An operation is a document when its answer on its first status in
+    ``SUCCESS_STATUSES`` declares media types and none of them is
+    ``JSON_MEDIA_TYPE``. ``HAND_WRITTEN`` lists the endpoints a client writes
+    out itself. They keep their row and their shortcut but get no generated
+    method, which the hand-written one would otherwise have to override.
+    ``render_sharecard`` keeps its two charts positional while ``partner`` is
+    optional, a shape the generator has no rule for. ``MIXINS`` names each
+    mixin's file, its class, the client it is mixed into, and whether that
+    client awaits. ``SUMMARY_MAX_CHARS`` keeps a generated docstring's first
+    line within the line length the project lints for.
     """
 
     SCHEMA_URL: Final[str] = "https://api.astromansion.com/openapi.json"
@@ -72,33 +73,9 @@ class GeneratorConstants:
     SUMMARY_MAX_CHARS: Final[int] = 58
     SUMMARY_FALLBACK: Final[str] = "Call the endpoint"
 
-    RENAMES: Final[Mapping[tuple[str, str], str]] = MappingProxyType(
-        {
-            ("get", "/v1/custom-body/list"): "custom_bodies",
-            ("post", "/v1/custom-body/save"): "save_custom_body",
-            ("post", "/v1/custom-body/{name}"): "chart_with_custom_body",
-            ("delete", "/v1/custom-body/{name}"): "delete_custom_body",
-            ("get", "/v1/jobs"): "list_jobs",
-            ("post", "/v1/jobs"): "submit_job",
-            ("get", "/v1/jobs/{job_id}"): "job",
-            ("post", "/v1/jobs/batch"): "submit_batch_job",
-            ("get", "/v1/geo/search"): "search_places",
-            ("post", "/v1/moon-phases/query"): "moon_phases_for",
-            ("get", "/v1/moon-phases"): "moon_phases",
-        }
-    )
+    JSON_MEDIA_TYPE: Final[str] = "application/json"
+    SUCCESS_STATUSES: Final[range] = range(HTTPStatus.OK, HTTPStatus.MULTIPLE_CHOICES)
     HAND_WRITTEN: Final[frozenset[str]] = frozenset({"/v1/render/sharecard"})
-    BINARY: Final[frozenset[str]] = frozenset(
-        {
-            "/v1/export/pdf",
-            "/v1/export/csv",
-            "/v1/render/png",
-            "/v1/render/svg",
-            "/v1/render/biwheel",
-            "/v1/render/sharecard",
-            "/v1/render/astrocartography",
-        }
-    )
 
 
 class TemplateConstants:
@@ -526,48 +503,78 @@ class EndpointSchema:
     """Read the published OpenAPI schema into the rows of the endpoint table."""
 
     @staticmethod
-    def method_name(path: str, verb: str, shared: bool = False) -> str:
-        """Turn a path and a verb into a method name.
+    def method_name(operation: Mapping[str, Any]) -> str:
+        """Return the method name the schema gives an operation.
 
-        The rename table wins. Otherwise the path segments become the name,
-        and a placeholder or a shared path adds only what is needed to keep
-        the name unique: applying every rule at once produced
-        ``delete_delete_custom_body``.
+        The API names each operation as the SDKs name its method, by its
+        ``operationId``, and its own tests keep every id a unique snake_case
+        name. An id Python cannot call as a method stops the run, so it never
+        becomes a method nobody can reach.
 
         Args:
-            path: The path template from the schema.
-            verb: The lower-case HTTP verb.
-            shared: Whether another verb is published on the same path.
+            operation: The operation object from the schema.
 
         Returns:
-            The method name.
+            The operation's id.
+
+        Raises:
+            SystemExit: The id is missing, or is not a usable method name.
 
         Examples:
-            >>> EndpointSchema.method_name("/v1/natal", "post")
-            'natal'
-            >>> EndpointSchema.method_name("/v1/jobs/{job_id}", "get")
-            'job'
-            >>> EndpointSchema.method_name("/v1/people/{person_id}", "get")
-            'people_by_person_id'
-            >>> EndpointSchema.method_name("/v1/people/{person_id}", "delete")
-            'delete_people'
-            >>> EndpointSchema.method_name("/v1/people", "get", shared=True)
-            'list_people'
+            >>> EndpointSchema.method_name({"operationId": "search_places"})
+            'search_places'
+            >>> EndpointSchema.method_name({"operationId": "import"})
+            Traceback (most recent call last):
+                ...
+            SystemExit: operation id 'import' is not a usable method name
         """
-        override = GeneratorConstants.RENAMES.get((verb, path))
-        if override:
-            return override
-        segments = path.split("/")[2:]
-        parts = [part for part in segments if not part.startswith("{")]
-        holders = [part.strip("{}") for part in segments if part.startswith("{")]
-        name = "_".join(parts).replace("-", "_")
-        if verb == "delete":
-            return f"delete_{name}"
-        if holders:
-            name = f"{name}_by_{holders[0]}"
-        elif shared:
-            name = f"{'list' if verb == 'get' else verb}_{name}"
+        name = operation.get("operationId")
+        if (
+            not isinstance(name, str)
+            or not name.isidentifier()
+            or keyword.iskeyword(name)
+        ):
+            raise SystemExit(f"operation id {name!r} is not a usable method name")
         return name
+
+    @staticmethod
+    def is_document(operation: Mapping[str, Any]) -> bool:
+        """Return whether an operation's success is a document rather than JSON.
+
+        Read from the media types the operation declares for its first
+        success status. The API declares a document's own types, such as an
+        image, a PDF, or a table, and never JSON beside them.
+
+        Args:
+            operation: The operation object from the schema.
+
+        Returns:
+            True when that success declares media types and none is JSON.
+
+        Examples:
+            >>> EndpointSchema.is_document(
+            ...     {"responses": {"200": {"content": {"application/pdf": {}}}}}
+            ... )
+            True
+            >>> EndpointSchema.is_document(
+            ...     {"responses": {"202": {"content": {"application/json": {}}}}}
+            ... )
+            False
+            >>> EndpointSchema.is_document(
+            ...     {"responses": {"422": {"content": {"text/csv": {}}}}}
+            ... )
+            False
+        """
+        responses = operation.get("responses", {})
+        successes = sorted(
+            status
+            for status in responses
+            if status.isdigit() and int(status) in GeneratorConstants.SUCCESS_STATUSES
+        )
+        if not successes:
+            return False
+        content = responses[successes[0]].get("content", {})
+        return bool(content) and GeneratorConstants.JSON_MEDIA_TYPE not in content
 
     @staticmethod
     def classify(
@@ -593,7 +600,9 @@ class EndpointSchema:
         body = operation.get("requestBody")
         if not body:
             return "empty", []
-        ref = body["content"]["application/json"]["schema"].get("$ref", "")
+        ref = body["content"][GeneratorConstants.JSON_MEDIA_TYPE]["schema"].get(
+            "$ref", ""
+        )
         declared = schemas.get(ref.split("/")[-1], {})
         fields = list(declared.get("properties", {}))
         required = set(declared.get("required") or ())
@@ -624,9 +633,9 @@ class EndpointSchema:
             free-form and the shape has to be recognised at runtime.
         """
         try:
-            schema = operation["responses"]["200"]["content"]["application/json"][
-                "schema"
-            ]
+            schema = operation["responses"]["200"]["content"][
+                GeneratorConstants.JSON_MEDIA_TYPE
+            ]["schema"]
         except KeyError:
             return None
         ref = schema.get("$ref", "")
@@ -674,7 +683,8 @@ class EndpointSchema:
             One row per operation, sorted by path.
 
         Raises:
-            SystemExit: Two operations would get the same method name.
+            SystemExit: Two operations would get the same method name, or an
+                operation's id is not a usable method name.
         """
         if source.startswith("http"):
             # The API rejects the default urllib agent, so identify the tool.
@@ -692,9 +702,8 @@ class EndpointSchema:
         rows: list[dict[str, Any]] = []
         seen: set[str] = set()
         for path, operations in sorted(schema["paths"].items()):
-            shared = len(operations) > 1
             for verb, operation in operations.items():
-                name = cls.method_name(path, verb, shared)
+                name = cls.method_name(operation)
                 if name in seen:
                     raise SystemExit(f"duplicate method name {name!r} for {path}")
                 seen.add(name)
@@ -706,7 +715,7 @@ class EndpointSchema:
                         "path": path,
                         "kind": kind,
                         "fields": tuple(fields),
-                        "binary": path in GeneratorConstants.BINARY,
+                        "binary": cls.is_document(operation),
                         "enveloped": cls.enveloped(operation, schemas),
                         "summary": cls.summary(operation),
                     }
