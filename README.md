@@ -1,4 +1,4 @@
-![Astro Mansion, Official Python SDK](https://api.astromansion.com/v1/sky/banner.svg)
+![Astro Mansion, Official Python SDK](https://api.astromansion.com/v1/sky/banner.svg?sdk=python)
 
 # AstroMansion
 
