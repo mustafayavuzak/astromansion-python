@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.3
+
+- `planetary_system` calculates a planet's satellites for a birth, in three
+  frames at once. It is the API's new operation, so both clients have 68
+  methods. Its body is sent as given, as in
+  `client.planetary_system(birth=birth, parent="jupiter")`, and it needs a
+  plan with extended bodies.
+
 ## 0.3.2
 
 - `job` returns a job's whole status again. 0.3.0 and 0.3.1 took the status

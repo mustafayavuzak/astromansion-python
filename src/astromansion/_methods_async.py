@@ -3,7 +3,7 @@
 Produced by ``tools/generate_endpoints.py``. Do not edit: rerun the generator
 so the SDK cannot describe a surface the API does not serve.
 
-Endpoints: 66. Written on the client itself: render_sharecard.
+Endpoints: 67. Written on the client itself: render_sharecard.
 """
 
 from __future__ import annotations
@@ -2047,6 +2047,31 @@ class AsyncEndpoints:
             binary=False,
             technique="patterns",
             enveloped=True,
+        )
+
+    async def planetary_system(
+        self, body: dict[str, Any] | None = None, **fields: Any
+    ) -> Result:
+        """A planet's satellites, in three frames at once. Wraps ``POST /v1/planetary-system``.
+
+        Args:
+            body: The request body as one mapping, instead of keyword fields.
+            **fields: Body fields as keywords: ``birth``, ``parent``, ``options``.
+
+        Returns:
+            The decoded response.
+
+        Raises:
+            TypeError: Both a body mapping and keyword fields were given.
+            AstroMansionError: The API refused the call, or never answered.
+        """
+        return await self.request(
+            "POST",
+            "/v1/planetary-system",
+            json=RequestBodies.merge(body, fields),
+            binary=False,
+            technique="planetary_system",
+            enveloped=False,
         )
 
     async def profection(

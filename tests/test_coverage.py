@@ -17,7 +17,7 @@ from astromansion.models.constants.endpoints import EndpointConstants
 
 def test_the_table_covers_every_published_operation() -> None:
     endpoints = EndpointConstants.ALL
-    assert len(endpoints) == 67, f"tabloda {len(endpoints)} uc var"
+    assert len(endpoints) == 68, f"tabloda {len(endpoints)} uc var"
     assert len(EndpointConstants.BY_NAME) == len(endpoints), "ayni ada iki uc dusmus"
 
 
