@@ -3,7 +3,7 @@
 Produced by ``tools/generate_endpoints.py``. Do not edit: rerun the generator
 so the SDK cannot describe a surface the API does not serve.
 
-Endpoints: 67. Written on the client itself: render_sharecard.
+Endpoints: 68. Written on the client itself: render_sharecard.
 """
 
 from __future__ import annotations
@@ -1188,7 +1188,7 @@ class SyncEndpoints:
         Args:
             body: The request body as one mapping, instead of keyword fields.
             output: Path to write the document to, or ``None`` for the bytes.
-            **fields: Body fields as keywords: ``sections``, ``page_size``, ``title``, ``author``, ``custom_text``, ``accent``, ``white_label``, ``logo_b64``, ``birth``.
+            **fields: Body fields as keywords: ``sections``, ``page_size``, ``title``, ``author``, ``custom_text``, ``accent``, ``watermark``, ``white_label``, ``logo_b64``, ``birth``.
 
         Returns:
             The document's bytes, or the path it was written to.
@@ -2307,6 +2307,38 @@ class SyncEndpoints:
                 technique="render_biwheel",
                 enveloped=None,
                 **extra,
+            ),
+            output,
+        )
+
+    def render_chart(
+        self,
+        body: dict[str, Any] | None = None,
+        output: str | Path | None = None,
+        **fields: Any,
+    ) -> bytes | Path:
+        """Any kind of chart as a styled wheel: natal, rising sign,…. Wraps ``POST /v1/render/chart``.
+
+        Args:
+            body: The request body as one mapping, instead of keyword fields.
+            output: Path to write the document to, or ``None`` for the bytes.
+            **fields: Body fields as keywords: ``type``, ``format``, ``birth``, ``partner``, ``options``.
+
+        Returns:
+            The document's bytes, or the path it was written to.
+
+        Raises:
+            TypeError: Both a body mapping and keyword fields were given.
+            AstroMansionError: The API refused the call, or never answered.
+        """
+        return Responses.save_document(
+            self.request(
+                "POST",
+                "/v1/render/chart",
+                json=RequestBodies.merge(body, fields),
+                binary=True,
+                technique="render_chart",
+                enveloped=None,
             ),
             output,
         )

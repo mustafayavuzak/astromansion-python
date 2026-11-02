@@ -219,9 +219,9 @@ called:
 ```python
 chart = client.vedic_chart(date="2000-01-01", lat=51.4779, lon=0.0)
 
-chart.data          # the payload, wrapper removed
-chart.technique     # what the server called it, when it said
-chart.raw           # the untouched body, wrapper included
+chart.data  # the payload, wrapper removed
+chart.technique  # what the server called it, when it said
+chart.raw  # the untouched body, wrapper included
 ```
 
 A body that carries a real `result` field of its own is left alone; the
@@ -235,8 +235,11 @@ through `options.categories`:
 
 ```python
 lots = client.chart(
-    date="2000-01-01", time="12:00",
-    lat=51.4779, lon=0.0, timezone="Europe/London",
+    date="2000-01-01",
+    time="12:00",
+    lat=51.4779,
+    lon=0.0,
+    timezone="Europe/London",
     options={"categories": ["arabic_lots"]},
 )
 
@@ -268,9 +271,13 @@ paging:
 
 ```python
 found = client.bodies(
-    "fixed_stars", "arabic_lots",
-    date="2000-01-01", time="12:00",
-    lat=51.4779, lon=0.0, timezone="Europe/London",
+    "fixed_stars",
+    "arabic_lots",
+    date="2000-01-01",
+    time="12:00",
+    lat=51.4779,
+    lon=0.0,
+    timezone="Europe/London",
 )
 
 len(found["fixed_stars"])  # 906, in six requests
@@ -302,7 +309,10 @@ Read it anyway, or watch it arrive:
 
 ```python
 found = client.bodies(
-    "asteroids", date="2000-01-01", lat=51.4779, lon=0.0,
+    "asteroids",
+    date="2000-01-01",
+    lat=51.4779,
+    lon=0.0,
     confirm_large=True,
     on_page=lambda done, left, rows: print(f"{done} done, {left} to go"),
 )
@@ -312,9 +322,10 @@ For a handful of named bodies there is no walk at all:
 
 ```python
 page = client.chart(
-    date="2000-01-01", lat=51.4779, lon=0.0,
-    options={"include": ["Ceres", "Pallas", "Juno", "Vesta"],
-             "exclusive": True},
+    date="2000-01-01",
+    lat=51.4779,
+    lon=0.0,
+    options={"include": ["Ceres", "Pallas", "Juno", "Vesta"], "exclusive": True},
 )
 
 for rows in page.data["bodies"].values():
@@ -353,6 +364,68 @@ There is no ceiling on how many you may read this way. `options.all_bodies`
 walks every category at once and needs the full-catalog scope that comes with
 Pro and Enterprise; naming the categories yourself does not.
 
+## A planet's moons
+
+`planetary_system` reads one planet's satellites at the birth moment. It
+covers Mars, Jupiter, Saturn, Uranus, Neptune and Pluto, and it needs the
+`extended` scope that comes with Basic, Pro and Enterprise. With the `birth`
+mapping from the examples above:
+
+```python
+with AstroMansion() as client:
+    system = client.planetary_system(birth=birth, parent="jupiter")
+
+system.parent.natal_sign  # 'Aries'
+system.time.utc  # '2000-01-01T12:00:00Z'
+
+for moon in system.satellites:
+    print(
+        moon.name,
+        round(moon.geocentric.longitude, 2),
+        round(moon.parentcentric.longitude, 2),
+        moon.natal_parent_projected.sign,
+    )
+# Io 25.24 18.11 Libra
+# Europa 25.25 212.49 Taurus
+# Ganymede 25.23 219.91 Taurus
+# Callisto 25.38 80.07 Sagittarius
+```
+
+Every satellite carries three answers, and they are not versions of one
+another:
+
+- `geocentric` is where the moon is seen from Earth, on the ecliptic of
+  date, with the light time solved. From Earth the Galilean moons sit within
+  a fraction of a degree of Jupiter, so this longitude nearly repeats the
+  planet's own.
+- `parentcentric` is where the moon is in its orbit, measured on the
+  planet's equator. A planet-centred frame has no horizon, so it has no
+  houses.
+- `natal_parent_projected` carries that orbital phase onto the natal circle
+  from the planet's own natal degree. It is an AstroMansion derivation rather
+  than a received rule, and its `tradition` field says so.
+
+`system.frames` names each frame. The planet-centred one also publishes the
+pole its equator is built on, so the plane can be checked:
+
+```python
+frame = system.frames.parentcentric
+frame.frame_id  # 'jupiter_equator_iau2015_j2000_fixed'
+frame.pole.ra_deg, frame.pole.dec_deg  # (268.057204, 64.49581)
+```
+
+`options` narrows the answer. `satellites` names the moons and their order,
+and `include_geocentric=False` leaves the view from Earth out, so
+`geocentric` comes back as `None`:
+
+```python
+client.planetary_system(
+    birth=birth,
+    parent="saturn",
+    options={"satellites": ["titan", "enceladus"], "include_geocentric": False},
+)
+```
+
 ## MansionSQL
 
 A chart is a table of bodies, a table of houses and a table of aspects, and
@@ -363,8 +436,13 @@ answers it.
 
 ```python
 rows = client.query(
-    birth={"date": "2000-01-01", "time": "12:00",
-           "lat": 51.4779, "lon": 0.0, "timezone": 0},
+    birth={
+        "date": "2000-01-01",
+        "time": "12:00",
+        "lat": 51.4779,
+        "lon": 0.0,
+        "timezone": 0,
+    },
     sql="SELECT name, sign, dms FROM planets WHERE retrograde = 1",
 )
 
@@ -575,7 +653,8 @@ client.query(birth={...}, sql="SELECT ELEMENT('Lion') AS e FROM planets")
 
 ```python
 # Elemental balance.
-"SELECT ELEMENT(sign) AS element, COUNT(*) AS n "
+"SELECT ELEMENT(sign) AS element, COUNT(*) AS n"
+
 "FROM planets GROUP BY ELEMENT(sign) ORDER BY n DESC"
 
 # Planets in their own sign.
@@ -598,15 +677,17 @@ hand rather than calculating a second time.
 
 ```python
 # Everything aspecting a retrograde planet.
-"SELECT a, b, aspect, orb FROM aspects "
+"SELECT a, b, aspect, orb FROM aspects"
+
 "WHERE a IN (SELECT name FROM planets WHERE retrograde = 1)"
 ```
 
 The inner statement must select exactly one column, and is told so by count:
 
 ```python
-client.query(birth={...}, sql="SELECT a FROM aspects "
-                              "WHERE a IN (SELECT name, sign FROM planets)")
+client.query(
+    birth={...}, sql="SELECT a FROM aspects WHERE a IN (SELECT name, sign FROM planets)"
+)
 # ValidationError: subquery must select one column, got 2
 ```
 
@@ -625,13 +706,22 @@ Two charts in one statement, which is synastry written as a join:
 
 ```python
 rows = client.query(
-    birth={"date": "2000-01-01", "time": "12:00",
-           "lat": 51.4779, "lon": 0.0, "timezone": 0},
-    partner={"date": "1995-03-14", "time": "08:20",
-             "lat": 48.8566, "lon": 2.3522,
-             "timezone": "Europe/Paris"},
+    birth={
+        "date": "2000-01-01",
+        "time": "12:00",
+        "lat": 51.4779,
+        "lon": 0.0,
+        "timezone": 0,
+    },
+    partner={
+        "date": "1995-03-14",
+        "time": "08:20",
+        "lat": 48.8566,
+        "lon": 2.3522,
+        "timezone": "Europe/Paris",
+    },
     sql="SELECT a.name, a.sign, b.name AS partner "
-        "FROM natal_a a JOIN natal_b b ON a.sign = b.sign LIMIT 50",
+    "FROM natal_a a JOIN natal_b b ON a.sign = b.sign LIMIT 50",
 )
 ```
 
@@ -639,12 +729,22 @@ And transits against the natal chart:
 
 ```python
 rows = client.query(
-    birth={"date": "2000-01-01", "time": "12:00",
-           "lat": 51.4779, "lon": 0.0, "timezone": 0},
-    moment={"date": "2026-08-17", "time": "12:00",
-            "lat": 51.4779, "lon": 0.0, "timezone": 0},
+    birth={
+        "date": "2000-01-01",
+        "time": "12:00",
+        "lat": 51.4779,
+        "lon": 0.0,
+        "timezone": 0,
+    },
+    moment={
+        "date": "2026-08-17",
+        "time": "12:00",
+        "lat": 51.4779,
+        "lon": 0.0,
+        "timezone": 0,
+    },
     sql="SELECT t.name, t.sign, n.name AS natal "
-        "FROM transits t JOIN chart n ON t.sign = n.sign LIMIT 50",
+    "FROM transits t JOIN chart n ON t.sign = n.sign LIMIT 50",
 )
 ```
 
@@ -657,8 +757,11 @@ Without `format` the answer is rows. `box` and `csv` render it as text, meant
 for a terminal rather than for parsing, and arrive as `str`:
 
 ```python
-print(client.query(birth={...}, sql="SELECT name, sign FROM planets LIMIT 3",
-                   format="box"))
+print(
+    client.query(
+        birth={...}, sql="SELECT name, sign FROM planets LIMIT 3", format="box"
+    )
+)
 # ┌─────────┬───────────┐
 # │ name    │ sign      │
 # ├─────────┼───────────┤
@@ -677,16 +780,18 @@ response rather than like a string you have to decode yourself.
 list of one:
 
 ```python
-client.query(birth={...}, sql="SELECT COUNT(*) AS n FROM stars",
-             format="scalar").data          # 953.0
+client.query(
+    birth={...}, sql="SELECT COUNT(*) AS n FROM stars", format="scalar"
+).data  # 953.0
 
-client.query(birth={...}, sql="SELECT name, sign FROM planets LIMIT 1",
-             format="object").data["sign"]  # 'Capricorn'
+client.query(
+    birth={...}, sql="SELECT name, sign FROM planets LIMIT 1", format="object"
+).data["sign"]  # 'Capricorn'
 ```
 
 ## Every endpoint
 
-Every published operation, 68 of them, has a method on both clients and a
+Every published operation, 69 of them, has a method on both clients and a
 module-level shortcut, all generated from the schema: `natal`, `transits`, `synastry`, `composite`,
 `solar_return`, `progression`, `harmonics`, `astrocartography`, `vedic_chart`,
 `zodiacal_releasing`, `firdaria`, `horary`, `electional` and the rest.
@@ -757,8 +862,9 @@ client.export_pdf(date="2000-01-01", lat=51.4779, lon=0.0, output="chart.pdf")
 ```
 
 Every endpoint that answers with a document takes `output` the same way:
-`export_pdf`, `export_csv`, `render_svg`, `render_png`, `render_biwheel` and
-`render_sharecard`, on both clients.
+`export_pdf`, `export_csv`, `export_report`, `render_svg`, `render_png`,
+`render_biwheel`, `render_chart`, `render_astrocartography` and `render_sharecard`,
+on both clients.
 
 ```python
 client.render_svg(date="2000-01-01", lat=51.4779, lon=0.0, output="wheel.svg")
@@ -766,6 +872,73 @@ client.render_svg(date="2000-01-01", lat=51.4779, lon=0.0, output="wheel.svg")
 
 Nothing is written to disk unless you name a path, so a call cannot overwrite
 a file you did not choose. Without one you get the bytes and decide yourself.
+
+### Styled chart wheels
+
+`render_chart` draws a chart as SVG or PNG and takes its complete request body.
+The same method is available on `AsyncAstroMansion`, with `await`.
+
+```python
+birth = {
+    "date": "1990-07-15",
+    "time": "14:30",
+    "lat": 51.5074,
+    "lon": -0.1278,
+    "timezone": "Europe/London",
+}
+
+client.render_chart(
+    type="natal",
+    format="svg",
+    birth=birth,
+    options={
+        "theme": "light",
+        "style": {
+            "preset": "ink",
+            "colors": {"house_lines": "#123456"},
+            "show": {"ticks": False, "watermark": False, "canvas_background": False},
+        },
+    },
+    output="styled-chart.svg",
+)
+
+client.render_chart(
+    type="natal",
+    format="png",
+    birth=birth,
+    options={"width": 800, "style": {"preset": "premium"}},
+    output="styled-chart.png",
+)
+```
+
+The kinds are `natal`, `rising`, `transits`, `synastry`, `composite`,
+`solar_return`, `lunar_return`, `saturn_return`, `progressions` and `solar_arc`. Synastry and
+composite need a second birth as `partner`. Moment options belong under
+`options`: `date` and `time` for transits, `year` for solar returns, `date`
+for lunar returns, and either `date` or `age` for progressions and solar arcs.
+Saturn returns use `cycle: 1`, `2` or `3`, defaulting to the first return.
+`custom_bodies` accepts up to eight Keplerian bodies on the first ring,
+using the custom-body endpoint's orbital fields. Their positions follow
+the chart's actual moment; a composite uses the midpoint of both placements.
+Rising-sign charts accept no bodies.
+
+Presets are `classic`, `minimal`, `ink`, `editorial` and `premium`. With no
+style the server uses `minimal`. Colours use six hexadecimal digits, such
+as `#123456`. The server validates style sections, ring order and the
+options each kind reads. `render_svg` and `render_png` also take `style`
+inside their `options`.
+
+`style.show.watermark` controls the faint centre logo. Set
+`style.show.canvas_background` to `False` for a painted wheel with
+transparent surroundings. Both default to `True` in the API. The designer
+starts with transparent surroundings and writes that choice into its JSON.
+For other outputs, use `options.watermark` in `natal` and `export_pdf`,
+and `watermark` in `render_biwheel` and `export_report`. White-label
+reports always omit the centre logo.
+
+Use the [chart designer](https://astromansion.com/en/chart-designer) to edit
+every setting and copy its JSON. A timeline, firdaria and zodiacal releasing
+are not wheel kinds in this version.
 
 ## Security
 

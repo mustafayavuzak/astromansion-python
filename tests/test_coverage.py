@@ -1,4 +1,4 @@
-"""Every published endpoint is reachable, by method and by shortcut.
+"""tests/test_coverage.py: Every API operation has methods and a shortcut.
 
 Coverage is not counted by hand. The endpoint table is generated from the
 API's own schema, and these tests check that both clients and the module-level
@@ -13,35 +13,49 @@ import pytest
 import astromansion
 from astromansion import AstroMansion, AsyncAstroMansion
 from astromansion.models.constants.endpoints import EndpointConstants
+from astromansion.models.dataclasses.endpoints import Endpoint
 
 
 def test_the_table_covers_every_published_operation() -> None:
+    """The schema's current operations each have one table entry."""
     endpoints = EndpointConstants.ALL
-    assert len(endpoints) == 68, f"tabloda {len(endpoints)} uc var"
+    assert len(endpoints) == 69, f"tabloda {len(endpoints)} uc var"
     assert len(EndpointConstants.BY_NAME) == len(endpoints), "ayni ada iki uc dusmus"
 
 
 @pytest.mark.parametrize("endpoint", EndpointConstants.ALL, ids=lambda e: e.name)
-def test_both_clients_expose_every_endpoint(endpoint) -> None:
+def test_both_clients_expose_every_endpoint(endpoint: Endpoint) -> None:
+    """Both clients expose the operation as a callable method.
+
+    Args:
+        endpoint: One operation from the generated schema table.
+    """
     for client in (AstroMansion, AsyncAstroMansion):
         method = getattr(client, endpoint.name, None)
         assert callable(method), f"{client.__name__}.{endpoint.name} yok"
 
 
 @pytest.mark.parametrize("endpoint", EndpointConstants.ALL, ids=lambda e: e.name)
-def test_every_method_documents_the_endpoint_it_wraps(endpoint) -> None:
-    """A docstring must name the API path it reaches."""
+def test_every_method_documents_the_endpoint_it_wraps(endpoint: Endpoint) -> None:
+    """A docstring must name the API path it reaches.
+
+    Args:
+        endpoint: The operation whose method and HTTP contract must agree.
+    """
     text = getattr(AstroMansion, endpoint.name).__doc__ or ""
     assert endpoint.path in text, f"{endpoint.name} yolunu belgelemiyor"
     assert endpoint.method in text
 
 
 @pytest.mark.parametrize("endpoint", EndpointConstants.ALL, ids=lambda e: e.name)
-def test_every_endpoint_has_a_module_level_shortcut(endpoint) -> None:
+def test_every_endpoint_has_a_module_level_shortcut(endpoint: Endpoint) -> None:
     """The shortcut surface covers the whole API, not a chosen few.
 
     A handful of hand-picked shortcuts read as the whole package while hiding
     most of it.
+
+    Args:
+        endpoint: The operation whose public shortcut must be callable.
     """
     shortcut = getattr(astromansion, endpoint.name, None)
     assert callable(shortcut), f"astromansion.{endpoint.name} yok"

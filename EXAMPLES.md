@@ -276,8 +276,7 @@ with AstroMansion() as client:
     aspects = client.query(
         birth=BIRTH,
         sql=(
-            "SELECT a, b, aspect, orb FROM aspects "
-            "WHERE orb < 1 ORDER BY orb LIMIT 20"
+            "SELECT a, b, aspect, orb FROM aspects WHERE orb < 1 ORDER BY orb LIMIT 20"
         ),
     )
 
