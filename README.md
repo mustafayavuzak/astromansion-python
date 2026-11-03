@@ -453,7 +453,8 @@ for row in rows.data:
 
 `query` takes the request body rather than flat birth fields, because a
 statement may name two charts and a moment, and each of them needs its own
-birth block. It needs the `advanced` scope.
+birth block. It needs the `query` scope that comes with Basic, Pro and
+Enterprise.
 
 ### Tables
 

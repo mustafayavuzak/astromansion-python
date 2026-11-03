@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.5
+
+- MansionSQL opens with Basic. `query` needs the API's own `query` scope,
+  which Basic, Pro and Enterprise grant, in place of the `advanced` scope of
+  Pro and Enterprise. The client itself is unchanged.
+
 ## 0.3.4
 
 - Centre watermark switches follow the API across natal, paired wheels and
