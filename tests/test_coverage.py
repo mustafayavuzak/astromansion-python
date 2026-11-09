@@ -19,7 +19,7 @@ from astromansion.models.dataclasses.endpoints import Endpoint
 def test_the_table_covers_every_published_operation() -> None:
     """The schema's current operations each have one table entry."""
     endpoints = EndpointConstants.ALL
-    assert len(endpoints) == 69, f"tabloda {len(endpoints)} uc var"
+    assert len(endpoints) == 70, f"tabloda {len(endpoints)} uc var"
     assert len(EndpointConstants.BY_NAME) == len(endpoints), "ayni ada iki uc dusmus"
 
 

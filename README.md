@@ -923,6 +923,24 @@ using the custom-body endpoint's orbital fields. Their positions follow
 the chart's actual moment; a composite uses the midpoint of both placements.
 Rising-sign charts accept no bodies.
 
+A chart of one moment (`natal`, `solar_return`, `lunar_return` and
+`saturn_return`) can be drawn in another zodiac with `zodiac`: `tropical`
+(the default), `sidereal` or `draconic`. A sidereal chart reads `ayanamsa`:
+`true_citra` (the default), `lahiri`, `raman`, `kp` or `fagan`. Every place
+moves back by the ayanamsa of the chart's moment, or by the true node's
+longitude for a draconic chart, and the wheel's heading names the zodiac.
+The other kinds refuse both options.
+
+```python
+client.render_chart(
+    type="natal",
+    format="svg",
+    birth=birth,
+    options={"zodiac": "sidereal", "ayanamsa": "lahiri"},
+    output="sidereal-chart.svg",
+)
+```
+
 Presets are `classic`, `minimal`, `ink`, `editorial` and `premium`. With no
 style the server uses `minimal`. Colours use six hexadecimal digits, such
 as `#123456`. The server validates style sections, ring order and the

@@ -3,7 +3,7 @@
 Produced by ``tools/generate_endpoints.py``. Do not edit: rerun the generator
 so the SDK cannot describe a surface the API does not serve.
 
-Endpoints: 68. Written on the client itself: render_sharecard.
+Endpoints: 69. Written on the client itself: render_sharecard.
 """
 
 from __future__ import annotations
@@ -2515,6 +2515,29 @@ class SyncEndpoints:
             houses=houses,
             binary=False,
             technique="saturn_return",
+            enveloped=False,
+        )
+
+    def sign(self, body: dict[str, Any] | None = None, **fields: Any) -> Result:
+        """A body's sign at a birth. Wraps ``POST /v1/sign``.
+
+        Args:
+            body: The request body as one mapping, instead of keyword fields.
+            **fields: Body fields as keywords: ``body``, ``birth``, ``options``.
+
+        Returns:
+            The decoded response.
+
+        Raises:
+            TypeError: Both a body mapping and keyword fields were given.
+            AstroMansionError: The API refused the call, or never answered.
+        """
+        return self.request(
+            "POST",
+            "/v1/sign",
+            json=RequestBodies.merge(body, fields),
+            binary=False,
+            technique="sign",
             enveloped=False,
         )
 
