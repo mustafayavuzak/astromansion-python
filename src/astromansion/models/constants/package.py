@@ -18,6 +18,6 @@ class PackageConstants:
     package and its version, and nothing about the machine or the caller.
     """
 
-    VERSION: Final[str] = "0.3.6"
+    VERSION: Final[str] = "0.3.7"
     NAME: Final[str] = "astromansion"
     USER_AGENT: Final[str] = f"{NAME}/{VERSION}"

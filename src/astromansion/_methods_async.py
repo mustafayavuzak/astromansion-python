@@ -3,7 +3,7 @@
 Produced by ``tools/generate_endpoints.py``. Do not edit: rerun the generator
 so the SDK cannot describe a surface the API does not serve.
 
-Endpoints: 69. Written on the client itself: render_sharecard.
+Endpoints: 78. Written on the client itself: render_sharecard.
 """
 
 from __future__ import annotations
@@ -286,6 +286,54 @@ class AsyncEndpoints:
             Returns:
                 The decoded response, or the document's bytes.
             """
+
+    async def age_point(
+        self,
+        payload: dict[str, Any] | None = None,
+        *,
+        date: str | None = None,
+        lat: float | None = None,
+        lon: float | None = None,
+        time: str | None = None,
+        timezone: float | str | None = None,
+        houses: str | None = None,
+        options: dict[str, Any] | None = None,
+    ) -> Result:
+        """Huber age point through the houses. Wraps ``POST /v1/age-point``.
+
+        Birth fields come as one mapping or as keywords, never both.
+
+        Args:
+            payload: Birth fields as one mapping, instead of the keywords.
+            date: Calendar date as ``YYYY-MM-DD``.
+            lat: Latitude in decimal degrees, north positive.
+            lon: Longitude in decimal degrees, east positive.
+            time: Clock time as ``HH:MM``; omit it for an unknown birth time.
+            timezone: UTC offset in hours, or an IANA zone name.
+            houses: A house system identifier the API publishes.
+            options: The endpoint's options.
+
+        Returns:
+            The decoded response.
+
+        Raises:
+            ValidationError: A birth field is malformed, or the API refused the body.
+            AstroMansionError: The API refused the call, or never answered.
+        """
+        return await self._chart(
+            "/v1/age-point",
+            payload,
+            options,
+            date=date,
+            lat=lat,
+            lon=lon,
+            time=time,
+            timezone=timezone,
+            houses=houses,
+            binary=False,
+            technique="age_point",
+            enveloped=True,
+        )
 
     async def almanac(
         self,
@@ -858,6 +906,54 @@ class AsyncEndpoints:
             enveloped=True,
         )
 
+    async def decennials(
+        self,
+        payload: dict[str, Any] | None = None,
+        *,
+        date: str | None = None,
+        lat: float | None = None,
+        lon: float | None = None,
+        time: str | None = None,
+        timezone: float | str | None = None,
+        houses: str | None = None,
+        options: dict[str, Any] | None = None,
+    ) -> Result:
+        """Valens' decennials. Wraps ``POST /v1/decennials``.
+
+        Birth fields come as one mapping or as keywords, never both.
+
+        Args:
+            payload: Birth fields as one mapping, instead of the keywords.
+            date: Calendar date as ``YYYY-MM-DD``.
+            lat: Latitude in decimal degrees, north positive.
+            lon: Longitude in decimal degrees, east positive.
+            time: Clock time as ``HH:MM``; omit it for an unknown birth time.
+            timezone: UTC offset in hours, or an IANA zone name.
+            houses: A house system identifier the API publishes.
+            options: The endpoint's options.
+
+        Returns:
+            The decoded response.
+
+        Raises:
+            ValidationError: A birth field is malformed, or the API refused the body.
+            AstroMansionError: The API refused the call, or never answered.
+        """
+        return await self._chart(
+            "/v1/decennials",
+            payload,
+            options,
+            date=date,
+            lat=lat,
+            lon=lon,
+            time=time,
+            timezone=timezone,
+            houses=houses,
+            binary=False,
+            technique="decennials",
+            enveloped=True,
+        )
+
     async def declinations(
         self,
         payload: dict[str, Any] | None = None,
@@ -1257,6 +1353,54 @@ class AsyncEndpoints:
             enveloped=True,
         )
 
+    async def fixed_stars(
+        self,
+        payload: dict[str, Any] | None = None,
+        *,
+        date: str | None = None,
+        lat: float | None = None,
+        lon: float | None = None,
+        time: str | None = None,
+        timezone: float | str | None = None,
+        houses: str | None = None,
+        options: dict[str, Any] | None = None,
+    ) -> Result:
+        """Fixed stars and the points on them. Wraps ``POST /v1/fixed-stars``.
+
+        Birth fields come as one mapping or as keywords, never both.
+
+        Args:
+            payload: Birth fields as one mapping, instead of the keywords.
+            date: Calendar date as ``YYYY-MM-DD``.
+            lat: Latitude in decimal degrees, north positive.
+            lon: Longitude in decimal degrees, east positive.
+            time: Clock time as ``HH:MM``; omit it for an unknown birth time.
+            timezone: UTC offset in hours, or an IANA zone name.
+            houses: A house system identifier the API publishes.
+            options: The endpoint's options.
+
+        Returns:
+            The decoded response.
+
+        Raises:
+            ValidationError: A birth field is malformed, or the API refused the body.
+            AstroMansionError: The API refused the call, or never answered.
+        """
+        return await self._chart(
+            "/v1/fixed-stars",
+            payload,
+            options,
+            date=date,
+            lat=lat,
+            lon=lon,
+            time=time,
+            timezone=timezone,
+            houses=houses,
+            binary=False,
+            technique="fixed_stars",
+            enveloped=True,
+        )
+
     async def search_places(self, **params: Any) -> Result:
         """Search place names. Wraps ``GET /v1/geo/search``.
 
@@ -1276,6 +1420,54 @@ class AsyncEndpoints:
             binary=False,
             technique="search_places",
             enveloped=False,
+        )
+
+    async def great_conjunctions(
+        self,
+        payload: dict[str, Any] | None = None,
+        *,
+        date: str | None = None,
+        lat: float | None = None,
+        lon: float | None = None,
+        time: str | None = None,
+        timezone: float | str | None = None,
+        houses: str | None = None,
+        options: dict[str, Any] | None = None,
+    ) -> Result:
+        """Jupiter and Saturn's great conjunctions. Wraps ``POST /v1/great-conjunctions``.
+
+        Birth fields come as one mapping or as keywords, never both.
+
+        Args:
+            payload: Birth fields as one mapping, instead of the keywords.
+            date: Calendar date as ``YYYY-MM-DD``.
+            lat: Latitude in decimal degrees, north positive.
+            lon: Longitude in decimal degrees, east positive.
+            time: Clock time as ``HH:MM``; omit it for an unknown birth time.
+            timezone: UTC offset in hours, or an IANA zone name.
+            houses: A house system identifier the API publishes.
+            options: The endpoint's options.
+
+        Returns:
+            The decoded response.
+
+        Raises:
+            ValidationError: A birth field is malformed, or the API refused the body.
+            AstroMansionError: The API refused the call, or never answered.
+        """
+        return await self._chart(
+            "/v1/great-conjunctions",
+            payload,
+            options,
+            date=date,
+            lat=lat,
+            lon=lon,
+            time=time,
+            timezone=timezone,
+            houses=houses,
+            binary=False,
+            technique="great_conjunctions",
+            enveloped=True,
         )
 
     async def harmonics(
@@ -1491,6 +1683,54 @@ class AsyncEndpoints:
             enveloped=True,
         )
 
+    async def ingresses(
+        self,
+        payload: dict[str, Any] | None = None,
+        *,
+        date: str | None = None,
+        lat: float | None = None,
+        lon: float | None = None,
+        time: str | None = None,
+        timezone: float | str | None = None,
+        houses: str | None = None,
+        options: dict[str, Any] | None = None,
+    ) -> Result:
+        """Equinoxes, solstices, and the Aries ingress chart. Wraps ``POST /v1/ingresses``.
+
+        Birth fields come as one mapping or as keywords, never both.
+
+        Args:
+            payload: Birth fields as one mapping, instead of the keywords.
+            date: Calendar date as ``YYYY-MM-DD``.
+            lat: Latitude in decimal degrees, north positive.
+            lon: Longitude in decimal degrees, east positive.
+            time: Clock time as ``HH:MM``; omit it for an unknown birth time.
+            timezone: UTC offset in hours, or an IANA zone name.
+            houses: A house system identifier the API publishes.
+            options: The endpoint's options.
+
+        Returns:
+            The decoded response.
+
+        Raises:
+            ValidationError: A birth field is malformed, or the API refused the body.
+            AstroMansionError: The API refused the call, or never answered.
+        """
+        return await self._chart(
+            "/v1/ingresses",
+            payload,
+            options,
+            date=date,
+            lat=lat,
+            lon=lon,
+            time=time,
+            timezone=timezone,
+            houses=houses,
+            binary=False,
+            technique="ingresses",
+            enveloped=True,
+        )
+
     async def list_jobs(self, **params: Any) -> Result:
         """List jobs. Wraps ``GET /v1/jobs``.
 
@@ -1582,6 +1822,54 @@ class AsyncEndpoints:
             binary=False,
             technique="job",
             enveloped=False,
+        )
+
+    async def lots(
+        self,
+        payload: dict[str, Any] | None = None,
+        *,
+        date: str | None = None,
+        lat: float | None = None,
+        lon: float | None = None,
+        time: str | None = None,
+        timezone: float | str | None = None,
+        houses: str | None = None,
+        options: dict[str, Any] | None = None,
+    ) -> Result:
+        """All 38 classical Arabic lots. Wraps ``POST /v1/lots``.
+
+        Birth fields come as one mapping or as keywords, never both.
+
+        Args:
+            payload: Birth fields as one mapping, instead of the keywords.
+            date: Calendar date as ``YYYY-MM-DD``.
+            lat: Latitude in decimal degrees, north positive.
+            lon: Longitude in decimal degrees, east positive.
+            time: Clock time as ``HH:MM``; omit it for an unknown birth time.
+            timezone: UTC offset in hours, or an IANA zone name.
+            houses: A house system identifier the API publishes.
+            options: The endpoint's options.
+
+        Returns:
+            The decoded response.
+
+        Raises:
+            ValidationError: A birth field is malformed, or the API refused the body.
+            AstroMansionError: The API refused the call, or never answered.
+        """
+        return await self._chart(
+            "/v1/lots",
+            payload,
+            options,
+            date=date,
+            lat=lat,
+            lon=lon,
+            time=time,
+            timezone=timezone,
+            houses=houses,
+            binary=False,
+            technique="lots",
+            enveloped=True,
         )
 
     async def lunar_return(
@@ -2072,6 +2360,54 @@ class AsyncEndpoints:
             binary=False,
             technique="planetary_system",
             enveloped=False,
+        )
+
+    async def primary_directions(
+        self,
+        payload: dict[str, Any] | None = None,
+        *,
+        date: str | None = None,
+        lat: float | None = None,
+        lon: float | None = None,
+        time: str | None = None,
+        timezone: float | str | None = None,
+        houses: str | None = None,
+        options: dict[str, Any] | None = None,
+    ) -> Result:
+        """Primary directions of the Ascendant and the Midheaven. Wraps ``POST /v1/primary-directions``.
+
+        Birth fields come as one mapping or as keywords, never both.
+
+        Args:
+            payload: Birth fields as one mapping, instead of the keywords.
+            date: Calendar date as ``YYYY-MM-DD``.
+            lat: Latitude in decimal degrees, north positive.
+            lon: Longitude in decimal degrees, east positive.
+            time: Clock time as ``HH:MM``; omit it for an unknown birth time.
+            timezone: UTC offset in hours, or an IANA zone name.
+            houses: A house system identifier the API publishes.
+            options: The endpoint's options.
+
+        Returns:
+            The decoded response.
+
+        Raises:
+            ValidationError: A birth field is malformed, or the API refused the body.
+            AstroMansionError: The API refused the call, or never answered.
+        """
+        return await self._chart(
+            "/v1/primary-directions",
+            payload,
+            options,
+            date=date,
+            lat=lat,
+            lon=lon,
+            time=time,
+            timezone=timezone,
+            houses=houses,
+            binary=False,
+            technique="primary_directions",
+            enveloped=True,
         )
 
     async def profection(
@@ -2722,6 +3058,54 @@ class AsyncEndpoints:
             **extra,
         )
 
+    async def temperament(
+        self,
+        payload: dict[str, Any] | None = None,
+        *,
+        date: str | None = None,
+        lat: float | None = None,
+        lon: float | None = None,
+        time: str | None = None,
+        timezone: float | str | None = None,
+        houses: str | None = None,
+        options: dict[str, Any] | None = None,
+    ) -> Result:
+        """Temperament by Lilly's method. Wraps ``POST /v1/temperament``.
+
+        Birth fields come as one mapping or as keywords, never both.
+
+        Args:
+            payload: Birth fields as one mapping, instead of the keywords.
+            date: Calendar date as ``YYYY-MM-DD``.
+            lat: Latitude in decimal degrees, north positive.
+            lon: Longitude in decimal degrees, east positive.
+            time: Clock time as ``HH:MM``; omit it for an unknown birth time.
+            timezone: UTC offset in hours, or an IANA zone name.
+            houses: A house system identifier the API publishes.
+            options: The endpoint's options.
+
+        Returns:
+            The decoded response.
+
+        Raises:
+            ValidationError: A birth field is malformed, or the API refused the body.
+            AstroMansionError: The API refused the call, or never answered.
+        """
+        return await self._chart(
+            "/v1/temperament",
+            payload,
+            options,
+            date=date,
+            lat=lat,
+            lon=lon,
+            time=time,
+            timezone=timezone,
+            houses=houses,
+            binary=False,
+            technique="temperament",
+            enveloped=True,
+        )
+
     async def timeline(
         self,
         payload: dict[str, Any] | None = None,
@@ -2911,6 +3295,54 @@ class AsyncEndpoints:
             houses=houses,
             binary=False,
             technique="vedic_chart",
+            enveloped=True,
+        )
+
+    async def venus_star(
+        self,
+        payload: dict[str, Any] | None = None,
+        *,
+        date: str | None = None,
+        lat: float | None = None,
+        lon: float | None = None,
+        time: str | None = None,
+        timezone: float | str | None = None,
+        houses: str | None = None,
+        options: dict[str, Any] | None = None,
+    ) -> Result:
+        """Venus star point and the eight-year star. Wraps ``POST /v1/venus-star-point``.
+
+        Birth fields come as one mapping or as keywords, never both.
+
+        Args:
+            payload: Birth fields as one mapping, instead of the keywords.
+            date: Calendar date as ``YYYY-MM-DD``.
+            lat: Latitude in decimal degrees, north positive.
+            lon: Longitude in decimal degrees, east positive.
+            time: Clock time as ``HH:MM``; omit it for an unknown birth time.
+            timezone: UTC offset in hours, or an IANA zone name.
+            houses: A house system identifier the API publishes.
+            options: The endpoint's options.
+
+        Returns:
+            The decoded response.
+
+        Raises:
+            ValidationError: A birth field is malformed, or the API refused the body.
+            AstroMansionError: The API refused the call, or never answered.
+        """
+        return await self._chart(
+            "/v1/venus-star-point",
+            payload,
+            options,
+            date=date,
+            lat=lat,
+            lon=lon,
+            time=time,
+            timezone=timezone,
+            houses=houses,
+            binary=False,
+            technique="venus_star",
             enveloped=True,
         )
 

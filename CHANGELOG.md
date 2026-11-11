@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.3.7
+
+- Nine techniques the API published since 0.3.6 have methods, generated from
+  its schema like the others: `age_point`, `decennials`, `fixed_stars`,
+  `great_conjunctions`, `ingresses`, `lots`, `primary_directions`,
+  `temperament` and `venus_star`. The endpoint table counts 79
+  operations.
+
+- `saturn_return` takes `options.returns`, how many returns to follow, from
+  1 to 4. Each row is one crossing with its `pass`, `jd` and `lon`, so a
+  retrograde return lists all three of its crossings.
+
+- `transit_hits` times the five major aspects when `aspects` is left out, in
+  place of the conjunction alone. Aspect names are read in any letter case,
+  a minor aspect is refused by name, and `pass` counts the perfections at
+  each point of the zodiac apart, so a sextile from either side starts at 1.
+
+- The API's answers changed where the astrology did, and the client is
+  unchanged. An aspect's orb narrows with its kind, in a chart and in a
+  composite. Six lots follow Paulus, al-Biruni and Bonatti, the Lot of Death
+  from the eighth cusp. Antiscia report contra-antiscia too, declinations
+  leave out pairs that are one point, and a divisional chart holds the lagna,
+  Rahu and Ketu. An ingress names the `utc_offset` of its local time, the
+  firdaria's periods open on the local birthday, and `sign` writes the Sun's
+  and the Moon's motion as false.
+
+- A birth time its named zone's clocks skipped, such as 01:30 in London on
+  28 March 2021, is refused with a 422 that says so. Send the UTC offset in
+  hours as `timezone` to cast it on purpose.
+
 ## 0.3.6
 
 - `sign` wraps `POST /v1/sign`: one body's sign at a birth, its degree, house
