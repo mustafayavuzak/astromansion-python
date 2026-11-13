@@ -5,16 +5,42 @@ build-backend = "hatchling.build"
 [project]
 name = "astromansion"
 dynamic = ["version"]
-description = "Official Python client for the AstroMansion astrology API."
+description = "Official Python client for the AstroMansion astrology API: natal charts, transits, synastry, Vedic charts and astrocartography from NASA JPL ephemerides."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [{ name = "Mustafa Yavuz Ak", email = "founder@mustafayavuzak.com" }]
-keywords = ["astrology", "natal", "chart", "ephemeris", "api", "client"]
+keywords = [
+    "astrology",
+    "astrology-api",
+    "horoscope",
+    "birth-chart",
+    "natal-chart",
+    "zodiac",
+    "ephemeris",
+    "jpl-ephemeris",
+    "nasa-jpl",
+    "planets",
+    "transits",
+    "synastry",
+    "compatibility",
+    "solar-return",
+    "progressions",
+    "vedic-astrology",
+    "jyotish",
+    "astrocartography",
+    "chart-rendering",
+    "api-client",
+    "sdk",
+    "asyncio",
+]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Framework :: AsyncIO",
+    "Topic :: Software Development :: Libraries :: Python Modules",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",

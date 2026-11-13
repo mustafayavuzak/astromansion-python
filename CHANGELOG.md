@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.8
+
+- The package says what it covers where PyPI searches. The summary names
+  natal charts, transits, synastry, Vedic charts and astrocartography from
+  NASA JPL ephemerides, the keywords name the techniques and terms people
+  search for, such as `birth-chart`, `horoscope`, `vedic-astrology` and
+  `astrocartography`, and the classifiers add `Framework :: AsyncIO`, since
+  `AsyncAstroMansion` is async. The code is the same as 0.3.7.
+
 ## 0.3.7
 
 - Nine techniques the API published since 0.3.6 have methods, generated from
