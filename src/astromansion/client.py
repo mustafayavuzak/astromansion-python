@@ -199,7 +199,12 @@ class AstroMansion(SyncEndpoints):
                 Responses.error_code(response),
             ):
                 time.sleep(
-                    Backoff.delay(attempt, Backoff.retry_after(response.headers))
+                    Backoff.answered_wait(
+                        response.status_code,
+                        attempt,
+                        self.max_retries,
+                        response.headers,
+                    )
                 )
                 continue
             return Responses.decode(response, binary, technique, enveloped)

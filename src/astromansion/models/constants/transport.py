@@ -30,8 +30,19 @@ class RetryConstants:
     ``BACKOFF_CEILING_SECONDS``, then takes a random share of itself no
     smaller than ``JITTER_FLOOR_FRACTION``, so clients that failed together
     do not retry together.
+
+    A wait the server's answer asked for, such as a rate limit's, is never
+    silent. The client writes ``WAIT_WARNING`` to the ``LOGGER_NAME`` logger
+    before it sleeps, so a call that pauses for seconds says why. Python
+    prints a warning to standard error when the application configured no
+    logging, and an application that did can silence the logger by name.
     """
 
+    LOGGER_NAME: Final[str] = "astromansion"
+    WAIT_WARNING: Final[str] = (
+        "The AstroMansion API answered %d, so the client waits %.1f s "
+        "before retry %d of %d. Pass max_retries=0 to get the error at once."
+    )
     MAX_RETRIES: Final[int] = 2
     BACKOFF_SECONDS: Final[float] = 0.5
     BACKOFF_CEILING_SECONDS: Final[float] = 8.0

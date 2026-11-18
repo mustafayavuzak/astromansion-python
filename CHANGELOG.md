@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.3.9
+
+- A retry never waits in silence. Before each wait a server's answer asked
+  for, such as a rate limit's, the client logs a warning on the
+  `astromansion` logger with the status, the wait and the retry it comes
+  before. A visitor and the Free plan may send 3 requests a minute, so the
+  fourth waited up to 8 seconds a retry with nothing said.
+
+- The API's natal answer for a birth without a time now says
+  `time_known: False` and leaves out the Ascendant, the Midheaven, the houses
+  and the aspects to the two angles, which only the time decides. It used to
+  give the noon chart's angles as if they were the person's. The client reads
+  both answers unchanged, and the README says what to show.
+
 ## 0.3.8
 
 - The package says what it covers where PyPI searches. The summary names

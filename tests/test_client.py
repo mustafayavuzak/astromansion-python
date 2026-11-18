@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
+import time
 
 import httpx
 import pytest
@@ -27,6 +29,7 @@ from astromansion import (
     ValidationError,
 )
 from astromansion.models.constants.api import KeyMaskConstants
+from astromansion.models.constants.transport import RetryConstants
 
 BASE = "https://api.astromansion.com"
 KEY = "am_live_testkey_0123456789abcdef"
@@ -418,6 +421,31 @@ def test_a_rate_limit_reports_the_wait_the_server_asked_for() -> None:
     with pytest.raises(RateLimitError) as caught:
         AstroMansion(api_key=KEY, max_retries=0).natal(**BIRTH)
     assert caught.value.retry_after == 12.0
+
+
+@respx.mock
+def test_a_retried_rate_limit_says_why_the_call_waits(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A retried rate limit pauses as asked and warns once with status and pause."""
+    respx.post(f"{BASE}/v1/natal").mock(
+        side_effect=[
+            httpx.Response(
+                429,
+                headers={"Retry-After": "2"},
+                json={"error": {"code": "rate_limited", "message": "slow"}},
+            ),
+            httpx.Response(200, json=NATAL),
+        ],
+    )
+    waits: list[float] = []
+    monkeypatch.setattr(time, "sleep", waits.append)
+    with caplog.at_level(logging.WARNING, logger=RetryConstants.LOGGER_NAME):
+        AstroMansion(api_key=KEY, max_retries=1).natal(dict(BIRTH))
+    assert waits == [2.0]
+    assert [record.getMessage() for record in caplog.records] == [
+        RetryConstants.WAIT_WARNING % (429, 2.0, 1, 1)
+    ]
 
 
 @respx.mock

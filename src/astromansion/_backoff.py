@@ -13,11 +13,14 @@ clients that failed together do not retry together::
 
 from __future__ import annotations
 
+import logging
 import random
 from collections.abc import Mapping
 
 from .models.constants.api import ApiConstants
 from .models.constants.transport import RetryConstants
+
+_LOGGER = logging.getLogger(RetryConstants.LOGGER_NAME)
 
 
 class Backoff:
@@ -98,3 +101,32 @@ class Backoff:
         )
         floor = RetryConstants.JITTER_FLOOR_FRACTION
         return float(window * (floor + random.random() * (1.0 - floor)))
+
+    @classmethod
+    def answered_wait(
+        cls, status: int, attempt: int, retries: int, headers: Mapping[str, str]
+    ) -> float:
+        """Return the pause before repeating an answered request, and say why.
+
+        The warning goes to the ``RetryConstants.LOGGER_NAME`` logger before
+        the caller sleeps, so a rate limit's wait of several seconds is never
+        silent.
+
+        Args:
+            status: The answer's HTTP status, such as 429.
+            attempt: Zero-based number of the attempt that just failed.
+            retries: The retries the client allows after the first attempt.
+            headers: The answer's headers, read for ``Retry-After``.
+
+        Returns:
+            The pause in seconds, as ``delay`` computes it.
+
+        Examples:
+            >>> Backoff.answered_wait(429, 0, 2, {"Retry-After": "3"})
+            3.0
+        """
+        pause = cls.delay(attempt, cls.retry_after(headers))
+        _LOGGER.warning(
+            RetryConstants.WAIT_WARNING, status, pause, attempt + 1, retries
+        )
+        return pause

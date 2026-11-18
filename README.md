@@ -119,6 +119,13 @@ Fields: `date` as `YYYY-MM-DD`, `time` as `HH:MM` (omit if unknown), `lat` and
 `lon` in decimal degrees, `timezone` as an hour offset or an IANA zone name,
 `houses` for a house system.
 
+Without a `time` the chart is cast at local noon, and the natal answer says so
+with `time_known` set to `False`. Only the time decides the Ascendant, the
+Midheaven and the houses, so that answer leaves them out, along with every
+aspect to the two angles. `summary` then holds the Sun and the Moon alone, and
+no planet has a `house`. Never show a rising sign for a birth whose time is
+unknown.
+
 You can pass a mapping instead of keywords, but not both at once:
 
 ```python
@@ -857,6 +864,14 @@ reason.
 The client retries only failures that carry no result: connection errors, 429
 and 5xx, twice by default, honouring `Retry-After`. A refusal you must fix is
 never retried.
+
+A retry never waits in silence. Before each wait the server's answer asked
+for, the client logs a warning on the `astromansion` logger with the status,
+the wait, and the retry it comes before. Python prints it to standard error
+when your application configured no logging. A visitor and the Free plan may
+send 3 requests a minute, so the fourth request in a minute waits for the
+window to reopen, up to 8 seconds a retry. With `max_retries=0` the call
+raises `RateLimitError` at once, and its `retry_after` says how long to wait.
 
 ```python
 client = AstroMansion(timeout=60.0, max_retries=0)
