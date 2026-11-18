@@ -12,6 +12,21 @@ Nothing is computed locally. Every call reaches `https://api.astromansion.com`,
 which owns the ephemeris, your plan, your quota and your rate limit. The
 package never opens a feature the server did not grant.
 
+## Accuracy
+
+The server computes the planets' and the Moon's positions from NASA JPL data.
+We compared them with NASA JPL Horizons every three months from 1900 to 2100.
+
+| Measure                                                          | Result |
+| ---------------------------------------------------------------- | ------ |
+| Largest RMS deviation of any body, same Terrestrial Time instant | 0.19″  |
+| Largest single deviation, same Terrestrial Time instant          | 0.44″  |
+| Largest single deviation in Universal Time, 1900 to 2026         | 0.44″  |
+
+One arcsecond (″) is a 3600th of a degree. The figures were measured on
+22 August 2026. The method, each body's figures and the time-scale comparison
+are on the [accuracy page](https://astromansion.com/en/accuracy).
+
 ## Install
 
 ```bash
