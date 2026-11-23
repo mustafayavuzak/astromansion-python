@@ -814,7 +814,7 @@ client.query(
 
 ## Every endpoint
 
-Every published operation, 69 of them, has a method on both clients and a
+Every published operation, 80 of them, has a method on both clients and a
 module-level shortcut, all generated from the schema: `natal`, `transits`, `synastry`, `composite`,
 `solar_return`, `progression`, `harmonics`, `astrocartography`, `vedic_chart`,
 `zodiacal_releasing`, `firdaria`, `horary`, `electional` and the rest.

@@ -3,7 +3,7 @@
 Produced by ``tools/generate_endpoints.py``. Do not edit: rerun the generator
 so the SDK cannot describe a surface the API does not serve.
 
-Endpoints: 78. Written on the client itself: render_sharecard.
+Endpoints: 79. Written on the client itself: render_sharecard.
 """
 
 from __future__ import annotations
@@ -1284,7 +1284,7 @@ class SyncEndpoints:
         Args:
             body: The request body as one mapping, instead of keyword fields.
             output: Path to write the document to, or ``None`` for the bytes.
-            **fields: Body fields as keywords: ``sections``, ``page_size``, ``title``, ``author``, ``custom_text``, ``accent``, ``watermark``, ``white_label``, ``logo_b64``, ``birth``.
+            **fields: Body fields as keywords: ``sections``, ``page_size``, ``theme``, ``title``, ``author``, ``custom_text``, ``accent``, ``watermark``, ``white_label``, ``logo_b64``, ``birth``.
 
         Returns:
             The document's bytes, or the path it was written to.
@@ -1868,6 +1868,27 @@ class SyncEndpoints:
             binary=False,
             technique="lots",
             enveloped=True,
+        )
+
+    def lunar_calendar(self, **params: Any) -> Result:
+        """Daily lunar calendar. Wraps ``GET /v1/lunar-calendar``.
+
+        Args:
+            **params: Query parameters; those set to ``None`` are left out.
+
+        Returns:
+            The decoded response.
+
+        Raises:
+            AstroMansionError: The API refused the call, or never answered.
+        """
+        return self.request(
+            "GET",
+            "/v1/lunar-calendar",
+            params={k: v for k, v in params.items() if v is not None},
+            binary=False,
+            technique="lunar_calendar",
+            enveloped=False,
         )
 
     def lunar_return(
@@ -2581,12 +2602,12 @@ class SyncEndpoints:
         output: str | Path | None = None,
         **fields: Any,
     ) -> bytes | Path:
-        """Astrocartography map with line meanings. Wraps ``POST /v1/render/astrocartography``.
+        """Astrocartography map, as the site draws it. Wraps ``POST /v1/render/astrocartography``.
 
         Args:
             body: The request body as one mapping, instead of keyword fields.
             output: Path to write the document to, or ``None`` for the bytes.
-            **fields: Body fields as keywords: ``birth``, ``place``, ``lang``.
+            **fields: Body fields as keywords: ``birth``, ``place``, ``lang``, ``format``.
 
         Returns:
             The document's bytes, or the path it was written to.

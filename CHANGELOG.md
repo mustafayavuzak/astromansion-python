@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.3.10
+
+- `render_astrocartography` takes `format`. Left out or `"svg"`, the map is
+  the self-contained SVG, and `"png"` gives a PNG twice its size. The API now
+  draws the map as the AstroMansion site draws it, 800 by 443 pixels, each
+  planet's line named at its end and the site's key under the map, without
+  the former title and table of line meanings.
+
+- `lunar_calendar` reads a month's lunar calendar, each day with its lunar
+  day, phase, illumination and events. Both clients and the module-level
+  shortcuts have it, generated from the API's schema like the other methods.
+  It takes `year`, `month` and `lang`. The endpoint table counts 80
+  operations, and the README says so in place of the stale 69.
+
+- `export_report` takes `theme`, `"light"` or `"dark"`, the report's palette.
+
 ## 0.3.9
 
 - A retry never waits in silence. Before each wait a server's answer asked
