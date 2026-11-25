@@ -126,6 +126,19 @@ aspect to the two angles. `summary` then holds the Sun and the Moon alone, and
 no planet has a `house`. Never show a rising sign for a birth whose time is
 unknown.
 
+`chart` and `bodies` read a birth without a time the same way. Their answer
+leaves out the axes and the Arabic lots, which are reckoned from the
+Ascendant, and every body's `house` is `None`. Asking them for the
+`arabic_lots` category or an axis by name without a time is refused.
+
+A technique whose answer the time decides refuses a birth without one rather
+than guessing. Houses, the angles, the lots, the sect and directions all
+depend on it, so `transits`, `progression`, `solar_arc`, `profection`,
+`vedic_chart`, `synastry` and the rest of that kind raise `ValidationError`
+with `error_code` `time_required`. Ask for the time instead of sending noon.
+
+A birth date runs from the year 1 to 2999, the reach of the ephemeris.
+
 You can pass a mapping instead of keywords, but not both at once:
 
 ```python
@@ -239,16 +252,34 @@ response reads the same way and you never have to remember which kind you
 called:
 
 ```python
-chart = client.vedic_chart(date="2000-01-01", lat=51.4779, lon=0.0)
+chart = client.vedic_chart(
+    date="2000-01-01",
+    time="12:00",
+    lat=51.4779,
+    lon=0.0,
+    timezone="Europe/London",
+)
 
 chart.data  # the payload, wrapper removed
 chart.technique  # what the server called it, when it said
 chart.raw  # the untouched body, wrapper included
 ```
 
-A body that carries a real `result` field of its own is left alone; the
-wrapper is recognised by its exact shape rather than by the presence of a
-name that data is allowed to use.
+A body that carries a real `result` field of its own is left alone. The
+wrapper is recognised by the shape the API publishes for it rather than by
+the presence of a name that data is allowed to use.
+
+A technique's wrapper also carries notes beside its result, which stay in
+`raw`. `raw["defaults"]` names each option you left out and the value the
+technique chose for it, such as `{"body": "Venus"}`. `raw["birth_clock"]` is
+set when the birth's local time came twice because the clocks went back that
+night. It gives the offset the answer read the time with and the other one,
+and sending `other_offset` as the birth's `timezone` reads the second pass.
+A two-chart technique notes the partner's in `raw["partner_clock"]`.
+
+Every date an answer writes as `DD-MM-YYYY` also comes as `YYYY-MM-DD`, in a
+field of the same name with `_iso` added, so `date` has `date_iso` beside it.
+A time a technique writes carries its zone beside it in `timezone`.
 
 ## Arabic lots, fixed stars and the rest of the catalog
 
@@ -283,9 +314,13 @@ White Moon is filed under `hypotheticals` and comes back named
 it now answers the whole `hypotheticals` group. For White Moon alone, pass
 `options={"include": ["White Moon"], "exclusive": True}`.
 
-The `fixed_stars` calculation category resolves 906 unambiguous targets.
+The `fixed_stars` calculation category resolves 891 unambiguous targets.
+Fifteen stars are catalogued under two spellings, such as `El Nath` and
+`Elnath`. Either name finds the star, and the category lists it once.
 `Isis` and `Ketu` remain discoverable catalog names, but a bare-name lookup for
 either resolves the higher-priority non-stellar point with the same name.
+Lots come back under their chart names, such as `Lot of Eros`, which reach
+the lot by name while `Eros` stays the minor planet.
 
 `chart` answers one page at a time, and a large category is more than one
 page. Use `bodies` to read the whole of it and let the client follow the
@@ -302,7 +337,7 @@ found = client.bodies(
     timezone="Europe/London",
 )
 
-len(found["fixed_stars"])  # 906, in six requests
+len(found["fixed_stars"])  # 891, in six requests
 len(found["arabic_lots"])  # 38
 ```
 
@@ -312,22 +347,16 @@ never depends on how many.
 
 Each page costs a network round trip and the calculation inside it is a
 rounding error beside that, so `bodies` asks for the largest page the API
-serves. `page_size` lowers it, and lowering it buys nothing: the 906
-calculation targets take six requests at the default page size.
+serves. `page_size` lowers it, and lowering it buys nothing. The 891
+calculation targets take six requests at the default page size, and every
+category together takes nine.
 
-Some categories are enormous. `asteroids` holds twenty-eight thousand bodies,
-which is a hundred and seventy-seven round trips with nothing printed until
-the last one lands, and a program that prints nothing for a minute cannot be
-told apart from one that has hung. A walk that large stops after the first
-page and tells you the size:
-
-```python
-am.bodies("asteroids", date="2000-01-01", lat=51.4779, lon=0.0)
-# ValidationError: asteroids holds 28214 bodies, which is 177 requests and
-# will print nothing until the last one lands. Pass confirm_large=True ...
-```
-
-Read it anyway, or watch it arrive:
+A walk that would need more than twelve requests stops after the first page
+and tells you its size, since it prints nothing until the last page lands
+and a program that prints nothing for a minute cannot be told apart from one
+that has hung. No category the catalog publishes today is that large.
+`confirm_large=True` reads such a walk anyway, and `on_page` watches any walk
+arrive:
 
 ```python
 found = client.bodies(
@@ -335,10 +364,12 @@ found = client.bodies(
     date="2000-01-01",
     lat=51.4779,
     lon=0.0,
-    confirm_large=True,
     on_page=lambda done, left, rows: print(f"{done} done, {left} to go"),
 )
 ```
+
+That walk sends no `time`, so it is read at local noon and its rows have no
+`house`.
 
 For a handful of named bodies there is no walk at all:
 
@@ -490,7 +521,7 @@ Every table but three carries the body columns: `code`, `name`, `longitude`,
 | `planets` | the planets |
 | `points` | angles and derived points |
 | `advanced_points` | the further derived points |
-| `dwarfs`, `centaurs`, `comets`, `antiscia`, `eclipses`, `lilith`, `exoplanets`, `hypotheticals`, `planetary_nodes`, `arabic_lots` | that catalog category |
+| `dwarfs`, `asteroids`, `centaurs`, `comets`, `antiscia`, `eclipses`, `lilith`, `exoplanets`, `hypotheticals`, `planetary_nodes`, `arabic_lots` | that catalog category |
 | `natal_a` | the `birth` chart, named for joins |
 | `natal_b` | the `partner` chart |
 | `transits` | the `moment` chart |
@@ -508,28 +539,30 @@ Three have columns of their own:
 `transits` uses `moment`, and without one it is the current instant at the
 birth location.
 
-There is no `asteroids` table. One chart holds at most 192 bodies and the
-category is twenty-eight thousand, so the query is refused rather than
-silently reduced to the first 192:
+`fixed_stars` is larger than one chart. One chart holds at most 192 bodies and
+the category is 891, so a query over all of it is refused rather than
+silently reduced to the first 192. It raises `AstroMansionError` with
+`error_code` `query_too_wide`:
 
 ```python
-client.query(birth={...}, sql="SELECT name FROM asteroids")
-# ValidationError: The query asks for more bodies than one chart can hold.
+client.query(birth={...}, sql="SELECT name FROM fixed_stars")
+# AstroMansionError: The query asks for more bodies than one chart can hold.
 # Narrow it with WHERE name = 'Pallas', a minor planet number such as
 # WHERE name = '1198', or WHERE name IN (...). Use /v1/catalog to look a
 # body up by name.
 ```
 
 `stars` answers 953 rows, the `fixed_stars` catalog lists 908 names, and the
-category walk returns 906 unambiguous calculation targets. These are different
+category walk returns 891 unambiguous calculation targets. These are different
 selections, so a count taken from one does not describe the others. The table
 contains every catalog row the engine places against a stellar position: 908
 fixed-star rows, 40 exoplanets and 5 galactic and deep-sky points filed under
 `advanced_points`. One row per published name means counting rows and names
-gives the same answer.
+gives the same answer. A star catalogued under two spellings is a row and a
+name for each spelling, and one target in the walk.
 
-`lots` and the `arabic_lots` category do not divide that way. Both answer 38:
-the table gives the lots computed for one chart, the category gives the names
+`lots` and the `arabic_lots` category do not divide that way. Both answer 38.
+The table gives the lots computed for one chart, the category gives the names
 those lots are looked up by, and they are the same 38 lots.
 
 `SELECT` only. Anything else is refused before it reaches the engine, so a

@@ -251,7 +251,7 @@ class AsyncAstroMansion(AsyncEndpoints):
         birth: dict[str, Any] | None = None,
         partner: dict[str, Any] | None = None,
         *,
-        type: str = RequestBodyConstants.SHARECARD_SYNASTRY,
+        type: str | None = None,
         name: str | None = None,
         names: tuple[str, ...] | list[str] | None = None,
         lang: str | None = None,
@@ -264,7 +264,8 @@ class AsyncAstroMansion(AsyncEndpoints):
             birth: The chart as a mapping, or the first of two. Birth fields
                 may also be passed flat among ``extra``.
             partner: The second chart. Required for a synastry card.
-            type: ``synastry`` or ``natal``.
+            type: ``synastry`` or ``natal``. ``None`` draws the synastry card
+                with a ``partner`` and the natal card without one.
             name: The single display name a natal card prints.
             names: Display names, one for a natal card and two for a synastry card.
             lang: Card language, ``en`` or ``tr``.

@@ -222,7 +222,7 @@ class RequestBodies:
         birth: Mapping[str, Any] | None,
         partner: Mapping[str, Any] | None,
         *,
-        card_type: str,
+        card_type: str | None,
         name: str | None,
         names: Sequence[str] | None,
         lang: str | None,
@@ -232,13 +232,16 @@ class RequestBodies:
 
         Three call styles reach the same body: two mappings positionally, the
         same as keywords, or one chart's fields passed flat among ``extra``.
-        Birth fields found in ``extra`` are taken out of it.
+        Birth fields found in ``extra`` are taken out of it. A call that names
+        no type draws the synastry card when it gives a partner and the natal
+        card when it gives one chart.
 
         Args:
             birth: The chart as a mapping, or the first of two; ``None`` reads
                 the chart's fields from ``extra``.
             partner: The second chart, required by a synastry card.
-            card_type: ``synastry`` or ``natal``.
+            card_type: ``synastry`` or ``natal``, or ``None`` to draw the card
+                the charts given call for.
             name: The one display name a natal card prints.
             names: Display names, one per chart.
             lang: Card language, ``en`` or ``tr``.
@@ -253,12 +256,24 @@ class RequestBodies:
 
         Examples:
             >>> RequestBodies.sharecard(
-            ...     None, None, card_type="natal", name="Ada", names=None, lang=None,
+            ...     None, None, card_type=None, name="Ada", names=None, lang=None,
             ...     extra={"date": "2000-01-01", "lat": 0, "lon": 0},
             ... )  # doctest: +NORMALIZE_WHITESPACE
             {'birth': {'date': '2000-01-01', 'lat': 0.0, 'lon': 0.0},
              'type': 'natal', 'names': ['Ada']}
+            >>> chart = {"date": "2000-01-01", "lat": 0, "lon": 0}
+            >>> RequestBodies.sharecard(
+            ...     chart, chart, card_type=None, name=None, names=None,
+            ...     lang=None, extra={},
+            ... )["type"]
+            'synastry'
         """
+        if card_type is None:
+            card_type = (
+                RequestBodyConstants.SHARECARD_NATAL
+                if partner is None
+                else RequestBodyConstants.SHARECARD_SYNASTRY
+            )
         chart = (
             dict(birth)
             if birth is not None

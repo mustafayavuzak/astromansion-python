@@ -232,7 +232,9 @@ class AstroMansion(SyncEndpoints):
 
         A walk needing more than twelve requests stops after the first page
         and names the size, since nothing prints until the last page lands.
-        ``asteroids`` is twenty-eight thousand bodies and 177 round trips.
+        No category is that large today. The fixed stars, the largest, take
+        six requests. A birth without a time is read at local noon, its rows
+        without a house, and a walk of ``arabic_lots`` needs the time.
 
         Args:
             *categories: Category keys, such as ``fixed_stars``.
@@ -262,7 +264,7 @@ class AstroMansion(SyncEndpoints):
                     date="2000-01-01", time="12:00",
                     lat=51.4779, lon=0.0, timezone="Europe/London",
                 )
-                len(found["fixed_stars"])   # 906
+                len(found["fixed_stars"])   # 891
         """
         collected: dict[str, list[Any]] = {name: [] for name in categories}
         offset = 0
@@ -290,7 +292,7 @@ class AstroMansion(SyncEndpoints):
         birth: dict[str, Any] | None = None,
         partner: dict[str, Any] | None = None,
         *,
-        type: str = RequestBodyConstants.SHARECARD_SYNASTRY,
+        type: str | None = None,
         name: str | None = None,
         names: tuple[str, ...] | list[str] | None = None,
         lang: str | None = None,
@@ -301,14 +303,17 @@ class AstroMansion(SyncEndpoints):
 
         ``type="synastry"`` reads both charts and leads on the compatibility
         score; ``type="natal"`` reads ``birth`` alone and leads on the Sun,
-        Moon, and Ascendant. Written by hand so the two charts stay
-        positional, as they were before the natal card existed.
+        Moon, and Ascendant. Without a type, a call with a ``partner`` draws
+        the synastry card and a call without one the natal card. Written by
+        hand so the two charts stay positional, as they were before the natal
+        card existed.
 
         Args:
             birth: The chart as a mapping, or the first of two. Birth fields
                 may also be passed flat among ``extra``.
             partner: The second chart. Required for a synastry card.
-            type: ``synastry`` or ``natal``.
+            type: ``synastry`` or ``natal``. ``None`` draws the synastry card
+                with a ``partner`` and the natal card without one.
             name: The single display name a natal card prints.
             names: Display names, one for a natal card and two for a synastry card.
             lang: Card language, ``en`` or ``tr``.
